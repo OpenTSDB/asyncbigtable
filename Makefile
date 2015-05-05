@@ -122,6 +122,8 @@ protobuf_SOURCES := src/protobuf/ZeroCopyLiteralByteString.java
 asynchbase_LIBADD := \
 	$(NETTY)	\
 	$(SLF4J_API)	\
+	$(HBASE_CLIENT)	\
+	$(HBASE_COMMON)	\
 	$(ZOOKEEPER)	\
 	$(SUASYNC)	\
 	$(GUAVA)	\
@@ -295,6 +297,7 @@ pom.xml: pom.xml.in Makefile
 	    -e 's/@LOG4J_OVER_SLF4J_VERSION@/$(LOG4J_OVER_SLF4J_VERSION)/' \
 	    -e 's/@MOCKITO_VERSION@/$(MOCKITO_VERSION)/' \
 	    -e 's/@NETTY_VERSION@/$(NETTY_VERSION)/' \
+	    -e 's/@HBASE_VERSION@/$(HBASE_VERSION)/' \
 	    -e 's/@OBJENESIS_VERSION@/$(OBJENESIS_VERSION)/' \
 	    -e 's/@POWERMOCK_MOCKITO_VERSION@/$(POWERMOCK_MOCKITO_VERSION)/' \
 	    -e 's/@PROTOBUF_VERSION@/$(PROTOBUF_VERSION)/' \

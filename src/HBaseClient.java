@@ -45,6 +45,13 @@ import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import com.google.common.cache.LoadingCache;
 import com.google.protobuf.InvalidProtocolBufferException;
 
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.hbase.HBaseConfiguration;
+import org.apache.hadoop.hbase.TableName;
+import org.apache.hadoop.hbase.client.Connection;
+import org.apache.hadoop.hbase.client.ConnectionFactory;
+import org.apache.hadoop.hbase.client.Put;
+import org.apache.hadoop.hbase.client.Table;
 import org.apache.zookeeper.AsyncCallback;
 import org.apache.zookeeper.KeeperException.Code;
 import org.apache.zookeeper.WatchedEvent;
@@ -444,6 +451,12 @@ public final class HBaseClient {
   /** Number of {@link AtomicIncrementRequest} sent.  */
   private final Counter num_atomic_increments = new Counter();
 
+  /** HBase client configuration used by the standard HBase drive */
+  private final Configuration hbaseConfig;
+
+ /** HBase client connection using the standard HBase drive */
+  private final Connection hbaseConnection;
+
   /**
    * Constructor.
    * @param quorum_spec The specification of the quorum, e.g.
@@ -527,6 +540,15 @@ public final class HBaseClient {
                      final ClientSocketChannelFactory channel_factory) {
     this.channel_factory = channel_factory;
     zkclient = new ZKClient(quorum_spec, base_path);
+
+    this.hbaseConfig = HBaseConfiguration.create();
+    this.hbaseConfig.set("hbase.zookeeper.quorum", quorum_spec);
+    LOG.info("HBase API: Connecting with config: {}", this.hbaseConfig);
+    try {
+        this.hbaseConnection = ConnectionFactory.createConnection(hbaseConfig);
+    } catch (IOException e) {
+        throw new NonRecoverableException("Failed to create conection with config: " + hbaseConfig, e);
+    }
   }
 
   /**
@@ -777,6 +799,13 @@ public final class HBaseClient {
    * failure.  TODO(tsuna): Document possible / common failure scenarios.
    */
   public Deferred<Object> shutdown() {
+      if (hbaseConnection != null) {
+          try {
+              hbaseConnection.close();
+          } catch (IOException e) {
+              LOG.error("Error occurred while disconnecting from HBase", e);
+          }
+      }
     // This is part of step 3.  We need to execute this in its own thread
     // because Netty gets stuck in an infinite loop if you try to shut it
     // down from within a thread of its own thread pool.  They don't want
@@ -875,6 +904,7 @@ public final class HBaseClient {
               logme = new HashMap<String, RegionClient>(ip2client);
             }
           }
+
           if (logme != null) {
             // Putting this logging statement inside the synchronized block
             // can lead to a deadlock, since HashMap.toString() is going to
@@ -1340,7 +1370,34 @@ public final class HBaseClient {
    */
   public Deferred<Object> put(final PutRequest request) {
     num_puts.increment();
-    return sendRpcToRegion(request);
+
+      LOG.info("HBase API: Saving put {}", request.toString());
+      Table table = null;
+      try {
+          table = hbaseConnection.getTable(TableName.valueOf(request.table()));
+          Put put = new Put(request.key());
+
+          long ts = request.timestamp();
+          for (int i = 0; i < request.qualifiers().length; i++) {
+              put.addColumn(request.family, request.qualifiers()[i], ts, request.values()[i]);
+          }
+          table.put(put);
+
+          LOG.info("HBase API: Saved put {}", put.toJSON());
+          return Deferred.fromResult(null);
+
+      } catch (IOException e) {
+          return Deferred.fromError(e);
+      } finally {
+          if (table != null) {
+              try {
+                  table.close();
+              } catch (IOException e) {
+                 return  Deferred.fromError(e);
+              }
+          }
+      }
+    // return sendRpcToRegion(request);
   }
 
   /**

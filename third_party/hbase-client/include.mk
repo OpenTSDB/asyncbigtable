@@ -23,21 +23,22 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-ASYNCHBASE_THIRD_PARTY_BASE_URL := http://opentsdb.googlecode.com/files
-FETCH_DEPENDENCY := ./build-aux/fetchdep.sh "$$@"
-THIRD_PARTY =
+HBASE_VERSION := 1.0.1
 
-include third_party/guava/include.mk
-include third_party/hamcrest/include.mk
-include third_party/javassist/include.mk
-include third_party/junit/include.mk
-include third_party/logback/include.mk
-include third_party/mockito/include.mk
-include third_party/netty/include.mk
-include third_party/objenesis/include.mk
-include third_party/powermock/include.mk
-include third_party/protobuf/include.mk
-include third_party/slf4j/include.mk
-include third_party/suasync/include.mk
-include third_party/zookeeper/include.mk
-include third_party/hbase-client/include.mk
+
+HBASE_CLIENT_VERSION := $(HBASE_VERSION)
+HBASE_CLIENT := third_party/hbase-client/hbase-client-$(HBASE_CLIENT_VERSION).jar
+HBASE_CLIENT_URL := http://central.maven.org/maven2/org/apache/hbase/hbase-client/$(HBASE_CLIENT_VERSION)
+
+$(HBASE_CLIENT): $(HBASE_CLIENT).md5
+	set dummy "$(HBASE_CLIENT_URL)" "$(HBASE_CLIENT)"; shift; $(FETCH_DEPENDENCY)
+
+
+HBASE_COMMON_VERSION := $(HBASE_VERSION)
+HBASE_COMMON := third_party/hbase-client/hbase-common-$(HBASE_COMMON_VERSION).jar
+HBASE_COMMON_BASE_URL := http://central.maven.org/maven2/org/apache/hbase/hbase-common/$(HBASE_COMMON_VERSION)
+
+$(HBASE_COMMON): $(HBASE_COMMON).md5
+	set dummy "$(HBASE_COMMON_BASE_URL)" "$(HBASE_COMMON)"; shift; $(FETCH_DEPENDENCY)
+
+THIRD_PARTY += $(HBASE_COMMON) $(HBASE_CLIENT)
