@@ -23,22 +23,15 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-ASYNCHBASE_THIRD_PARTY_BASE_URL := http://opentsdb.googlecode.com/files
-FETCH_DEPENDENCY := ./build-aux/fetchdep.sh "$$@"
-THIRD_PARTY =
+HADOOP_VERSION := 2.6.0
 
-include third_party/guava/include.mk
-include third_party/hamcrest/include.mk
-include third_party/javassist/include.mk
-include third_party/junit/include.mk
-include third_party/logback/include.mk
-include third_party/mockito/include.mk
-include third_party/netty/include.mk
-include third_party/objenesis/include.mk
-include third_party/powermock/include.mk
-include third_party/protobuf/include.mk
-include third_party/slf4j/include.mk
-include third_party/suasync/include.mk
-include third_party/zookeeper/include.mk
-include third_party/hbase-client/include.mk
-include third_party/hadoop-common/include.mk
+
+
+HADOOP_COMMON_VERSION := $(HADOOP_VERSION)
+HADOOP_COMMON := third_party/hadoop-common/hadoop-common-$(HADOOP_COMMON_VERSION).jar
+HADOOP_COMMON_BASE_URL := http://central.maven.org/maven2/org/apache/hadoop/hadoop-common/$(HADOOP_COMMON_VERSION)
+
+$(HADOOP_COMMON): $(HADOOP_COMMON).md5
+	set dummy "$(HADOOP_COMMON_BASE_URL)" "$(HADOOP_COMMON)"; shift; $(FETCH_DEPENDENCY)
+
+THIRD_PARTY += $(HADOOP_COMMON)

@@ -124,6 +124,7 @@ asynchbase_LIBADD := \
 	$(SLF4J_API)	\
 	$(HBASE_CLIENT)	\
 	$(HBASE_COMMON)	\
+	$(HADOOP_COMMON)	\
 	$(ZOOKEEPER)	\
 	$(SUASYNC)	\
 	$(GUAVA)	\
@@ -231,7 +232,8 @@ check: $(top_builddir)/.javac-test-stamp $(UNITTESTS)
 
 pkg_version = \
   `git rev-list --pretty=format:%h HEAD --max-count=1 | sed 1d || echo unknown`
-$(top_builddir)/manifest: $(top_builddir)/.javac-stamp .git/HEAD
+#$(top_builddir)/manifest: $(top_builddir)/.javac-stamp .git/HEAD
+$(top_builddir)/manifest: $(top_builddir)/.javac-stamp
 	{ echo "Specification-Title: $(spec_title)"; \
           echo "Specification-Version: $(spec_version)"; \
           echo "Specification-Vendor: $(spec_vendor)"; \
@@ -298,6 +300,7 @@ pom.xml: pom.xml.in Makefile
 	    -e 's/@MOCKITO_VERSION@/$(MOCKITO_VERSION)/' \
 	    -e 's/@NETTY_VERSION@/$(NETTY_VERSION)/' \
 	    -e 's/@HBASE_VERSION@/$(HBASE_VERSION)/' \
+	    -e 's/@HADOOP_VERSION@/$(HADOOP_VERSION)/' \
 	    -e 's/@OBJENESIS_VERSION@/$(OBJENESIS_VERSION)/' \
 	    -e 's/@POWERMOCK_MOCKITO_VERSION@/$(POWERMOCK_MOCKITO_VERSION)/' \
 	    -e 's/@PROTOBUF_VERSION@/$(PROTOBUF_VERSION)/' \
