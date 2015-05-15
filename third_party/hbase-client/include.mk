@@ -25,7 +25,6 @@
 
 HBASE_VERSION := 1.0.1
 
-
 HBASE_CLIENT_VERSION := $(HBASE_VERSION)
 HBASE_CLIENT := third_party/hbase-client/hbase-client-$(HBASE_CLIENT_VERSION).jar
 HBASE_CLIENT_URL := http://central.maven.org/maven2/org/apache/hbase/hbase-client/$(HBASE_CLIENT_VERSION)

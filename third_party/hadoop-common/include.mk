@@ -25,8 +25,6 @@
 
 HADOOP_VERSION := 2.6.0
 
-
-
 HADOOP_COMMON_VERSION := $(HADOOP_VERSION)
 HADOOP_COMMON := third_party/hadoop-common/hadoop-common-$(HADOOP_COMMON_VERSION).jar
 HADOOP_COMMON_BASE_URL := http://central.maven.org/maven2/org/apache/hadoop/hadoop-common/$(HADOOP_COMMON_VERSION)

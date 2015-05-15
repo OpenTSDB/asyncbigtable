@@ -299,14 +299,14 @@ pom.xml: pom.xml.in Makefile
 	    -e 's/@LOG4J_OVER_SLF4J_VERSION@/$(LOG4J_OVER_SLF4J_VERSION)/' \
 	    -e 's/@MOCKITO_VERSION@/$(MOCKITO_VERSION)/' \
 	    -e 's/@NETTY_VERSION@/$(NETTY_VERSION)/' \
-	    -e 's/@HBASE_VERSION@/$(HBASE_VERSION)/' \
-	    -e 's/@HADOOP_VERSION@/$(HADOOP_VERSION)/' \
 	    -e 's/@OBJENESIS_VERSION@/$(OBJENESIS_VERSION)/' \
 	    -e 's/@POWERMOCK_MOCKITO_VERSION@/$(POWERMOCK_MOCKITO_VERSION)/' \
 	    -e 's/@PROTOBUF_VERSION@/$(PROTOBUF_VERSION)/' \
 	    -e 's/@SLF4J_API_VERSION@/$(SLF4J_API_VERSION)/' \
 	    -e 's/@SUASYNC_VERSION@/$(SUASYNC_VERSION)/' \
 	    -e 's/@ZOOKEEPER_VERSION@/$(ZOOKEEPER_VERSION)/' \
+	    -e 's/@HBASE_VERSION@/$(HBASE_VERSION)/' \
+	    -e 's/@HADOOP_VERSION@/$(HADOOP_VERSION)/' \
 	    -e 's/@spec_title@/$(spec_title)/' \
 	    -e 's/@spec_vendor@/$(spec_vendor)/' \
 	    -e 's/@spec_version@/$(spec_version)/' \

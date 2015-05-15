@@ -1385,15 +1385,14 @@ public final class HBaseClient {
 
           LOG.info("HBase API: Saved put {}", put.toJSON());
           return Deferred.fromResult(null);
-
       } catch (IOException e) {
           return Deferred.fromError(e);
       } finally {
           if (table != null) {
               try {
-                  table.close();
+                 table.close();
               } catch (IOException e) {
-                 return  Deferred.fromError(e);
+                 return Deferred.fromError(e);
               }
           }
       }
