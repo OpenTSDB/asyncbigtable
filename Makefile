@@ -154,7 +154,7 @@ test_LIBADD := \
         $(jar)
 
 package_dir := $(subst .,/,$(package))
-AM_JAVACFLAGS := -Xlint -source 6 -target 6
+AM_JAVACFLAGS := -Xlint -source 6 -target 6 -g:source,lines,vars
 JAVAC := javac
 JVM_ARGS :=
 PROTOC := protoc
