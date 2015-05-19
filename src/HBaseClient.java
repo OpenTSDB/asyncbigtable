@@ -31,11 +31,7 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.net.UnknownHostException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.Executor;
@@ -46,12 +42,10 @@ import com.google.common.cache.LoadingCache;
 import com.google.protobuf.InvalidProtocolBufferException;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.hbase.Cell;
 import org.apache.hadoop.hbase.HBaseConfiguration;
 import org.apache.hadoop.hbase.TableName;
-import org.apache.hadoop.hbase.client.Connection;
-import org.apache.hadoop.hbase.client.ConnectionFactory;
-import org.apache.hadoop.hbase.client.Put;
-import org.apache.hadoop.hbase.client.Table;
+import org.apache.hadoop.hbase.client.*;
 import org.apache.zookeeper.AsyncCallback;
 import org.apache.zookeeper.KeeperException.Code;
 import org.apache.zookeeper.WatchedEvent;
@@ -79,6 +73,8 @@ import com.stumbleupon.async.Callback;
 import com.stumbleupon.async.Deferred;
 
 import org.hbase.async.generated.ZooKeeperPB;
+
+import java.util.NavigableMap;
 
 /**
  * A fully asynchronous, thread-safe, modern HBase client.
@@ -1022,7 +1018,51 @@ public final class HBaseClient {
    */
   public Deferred<ArrayList<KeyValue>> get(final GetRequest request) {
     num_gets.increment();
-    return sendRpcToRegion(request).addCallbacks(got, Callback.PASSTHROUGH);
+
+      LOG.debug("HBase API: Getting data for {}", request.toString());
+      Table table = null;
+      try {
+          table = hbaseConnection.getTable(TableName.valueOf(request.table()));
+          Get get = new Get(request.key());
+
+          for (byte[] qualifier : request.qualifiers()) {
+              get.addColumn(request.family(), qualifier);
+          }
+
+          Result result = table.get(get);
+
+          ArrayList<KeyValue> keyValueList = new ArrayList<KeyValue>(result.size());
+
+          if (!result.isEmpty()) {
+              for (NavigableMap.Entry<byte[], NavigableMap<byte[], NavigableMap<Long, byte[]>>> familyEntry : result.getMap().entrySet()) {
+                  byte[] family = familyEntry.getKey();
+                  for (NavigableMap.Entry<byte[], NavigableMap<Long, byte[]>> qualifierEntry : familyEntry.getValue().entrySet()) {
+                      byte[] qualifier = qualifierEntry.getKey();
+                      long ts = qualifierEntry.getValue().firstKey();
+                      byte[] value = qualifierEntry.getValue().get(ts);
+
+                      KeyValue kv = new KeyValue(result.getRow(), family,
+                              qualifier, ts, value);
+                      keyValueList.add(kv);
+                  }
+              }
+          }
+
+          LOG.info("HBase API: Retrieved get {}", keyValueList);
+          return Deferred.fromResult(keyValueList);
+      } catch (IOException e) {
+          return Deferred.fromError(e);
+      } finally {
+          if (table != null) {
+              try {
+                  table.close();
+              } catch (IOException e) {
+                  return Deferred.fromError(e);
+              }
+          }
+      }
+
+    //return sendRpcToRegion(request).addCallbacks(got, Callback.PASSTHROUGH);
   }
 
   /** Singleton callback to handle responses of "get" RPCs.  */
@@ -1371,7 +1411,7 @@ public final class HBaseClient {
   public Deferred<Object> put(final PutRequest request) {
     num_puts.increment();
 
-      LOG.info("HBase API: Saving put {}", request.toString());
+      LOG.debug("HBase API: Saving put {}", request.toString());
       Table table = null;
       try {
           table = hbaseConnection.getTable(TableName.valueOf(request.table()));
@@ -1383,7 +1423,7 @@ public final class HBaseClient {
           }
           table.put(put);
 
-          LOG.info("HBase API: Saved put {}", put.toJSON());
+          LOG.info("HBase API: Saved put {}", put.getRow());
           return Deferred.fromResult(null);
       } catch (IOException e) {
           return Deferred.fromError(e);
