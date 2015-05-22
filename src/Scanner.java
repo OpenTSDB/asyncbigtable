@@ -26,27 +26,31 @@
  */
 package org.hbase.async;
 
-import java.nio.charset.Charset;
-import java.util.ArrayList;
-import java.util.Arrays;
 
-import org.jboss.netty.buffer.ChannelBuffer;
-import org.jboss.netty.buffer.ChannelBuffers;
-import org.jboss.netty.util.CharsetUtil;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+//import org.hbase.async.generated.ClientPB.Column;
+////import org.hbase.async.generated.ClientPB.Scan;
+//import org.hbase.async.generated.ClientPB.ScanRequest;
+//import org.hbase.async.generated.ClientPB.ScanResponse;
+//import org.hbase.async.generated.FilterPB;
+//import org.hbase.async.generated.HBasePB.TimeRange;
 
 import com.stumbleupon.async.Callback;
 import com.stumbleupon.async.Deferred;
+import org.apache.hadoop.hbase.client.Result;
+import org.apache.hadoop.hbase.client.ResultScanner;
+import org.apache.hadoop.hbase.client.Scan;
+import org.apache.hadoop.hbase.client.Table;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import org.hbase.async.generated.ClientPB.Column;
-import org.hbase.async.generated.ClientPB.Scan;
-import org.hbase.async.generated.ClientPB.ScanRequest;
-import org.hbase.async.generated.ClientPB.ScanResponse;
-import org.hbase.async.generated.FilterPB;
-import org.hbase.async.generated.HBasePB.TimeRange;
+import java.io.IOException;
+import java.nio.charset.Charset;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.NavigableMap;
+
 import static org.hbase.async.HBaseClient.EMPTY_ARRAY;
+import static org.hbase.async.HBaseClient.PBUF_MAGIC;
 
 /**
  * Creates a scanner to read data sequentially from HBase.
@@ -87,6 +91,18 @@ import static org.hbase.async.HBaseClient.EMPTY_ARRAY;
 public final class Scanner {
 
   private static final Logger LOG = LoggerFactory.getLogger(Scanner.class);
+
+    /**
+     * HBase API scan instance
+     */
+    private final Scan hbaseScan;
+
+    /**
+     * HBase API ResultScanner. After the scan is submitted is must not be null.
+     */
+    private ResultScanner hbaseResultScanner;
+
+    private Table hbaseTable;
 
   /**
    * The default maximum number of {@link KeyValue}s the server is allowed
@@ -187,21 +203,19 @@ public final class Scanner {
    */
   private long scanner_id;
 
-  /**
-   * Request object we re-use to avoid generating too much garbage.
-   * @see #getNextRowsRequest
-   */
-  private GetNextRowsRequest get_next_rows_request;
+
 
   /**
    * Constructor.
    * <strong>This byte array will NOT be copied.</strong>
    * @param table The non-empty name of the table to use.
    */
-  Scanner(final HBaseClient client, final byte[] table) {
+  public Scanner(final HBaseClient client, final byte[] table) {
     KeyValue.checkTable(table);
     this.client = client;
     this.table = table;
+
+    this.hbaseScan = new Scan();
   }
 
   /**
@@ -223,6 +237,8 @@ public final class Scanner {
     KeyValue.checkKey(start_key);
     checkScanningNotStarted();
     this.start_key = start_key;
+
+    this.hbaseScan.setStartRow(start_key);
   }
 
   /**
@@ -246,6 +262,8 @@ public final class Scanner {
     KeyValue.checkKey(stop_key);
     checkScanningNotStarted();
     this.stop_key = stop_key;
+
+    this.hbaseScan.setStopRow(stop_key);
   }
 
   /**
@@ -267,6 +285,8 @@ public final class Scanner {
     KeyValue.checkFamily(family);
     checkScanningNotStarted();
     families = new byte[][] { family };
+
+    this.hbaseScan.addFamily(family);
   }
 
   /** Specifies a particular column family to scan.  */
@@ -299,6 +319,15 @@ public final class Scanner {
     }
     this.families = families;
     this.qualifiers = qualifiers;
+
+    for (int i = 0; i < families.length; i++) {
+      KeyValue.checkFamily(families[i]);
+      if (qualifiers != null && qualifiers[i] != null) {
+          for (byte[] qualifier : qualifiers[i]) {
+            this.hbaseScan.addColumn(families[i], qualifier);
+          }
+      }
+    }
   }
 
   /**
@@ -312,6 +341,8 @@ public final class Scanner {
       this.families[i] = families[i].getBytes();
       KeyValue.checkFamily(this.families[i]);
       qualifiers[i] = null;
+
+      this.hbaseScan.addFamily(this.families[i]);
     }
   }
 
@@ -328,6 +359,9 @@ public final class Scanner {
     KeyValue.checkQualifier(qualifier);
     checkScanningNotStarted();
     this.qualifiers = new byte[][][] { { qualifier } };
+
+    if (families.length > 0)
+      this.hbaseScan.addColumn(families[0], qualifier);
   }
 
   /** Specifies a particular column qualifier to scan.  */
@@ -378,6 +412,8 @@ public final class Scanner {
    */
   public void clearFilter() {
     filter = null;
+
+    this.hbaseScan.setFilter(null);
   }
 
   /**
@@ -425,6 +461,7 @@ public final class Scanner {
   public void setServerBlockCache(final boolean populate_blockcache) {
     checkScanningNotStarted();
     this.populate_blockcache = populate_blockcache;
+    this.hbaseScan.setCacheBlocks(populate_blockcache);
   }
 
   /**
@@ -490,6 +527,7 @@ public final class Scanner {
     }
     checkScanningNotStarted();
     this.max_num_kvs = max_num_kvs;
+    this.hbaseScan.setMaxResultsPerColumnFamily(max_num_kvs);
   }
 
   /**
@@ -519,6 +557,8 @@ public final class Scanner {
     }
     checkScanningNotStarted();
     this.versions = versions;
+
+    this.hbaseScan.setMaxVersions(versions);
   }
 
   /**
@@ -550,6 +590,8 @@ public final class Scanner {
     }
     checkScanningNotStarted();
     this.max_num_bytes = max_num_bytes;
+
+    this.hbaseScan.setMaxResultSize(max_num_bytes);
   }
 
   /**
@@ -583,6 +625,12 @@ public final class Scanner {
     }
     checkScanningNotStarted();
     min_timestamp = timestamp;
+
+    try {
+      this.hbaseScan.setTimeRange(getMinTimestamp(), getMaxTimestamp());
+    } catch (IOException e) {
+      throw new IllegalArgumentException("Invalid timestamp: " + timestamp, e);
+    }
   }
 
   /**
@@ -616,6 +664,12 @@ public final class Scanner {
     }
     checkScanningNotStarted();
     max_timestamp = timestamp;
+
+    try {
+      this.hbaseScan.setTimeRange(getMinTimestamp(), getMaxTimestamp());
+    } catch (IOException e) {
+      throw new IllegalArgumentException("Invalid timestamp: " + timestamp, e);
+    }
   }
 
   /**
@@ -654,9 +708,36 @@ public final class Scanner {
     // We now have the guarantee that max_timestamp >= 0, no need to check it.
     this.min_timestamp = min_timestamp;
     this.max_timestamp = max_timestamp;
+
+    try {
+      this.hbaseScan.setTimeRange(getMinTimestamp(), getMaxTimestamp());
+    } catch (IOException e) {
+      throw new IllegalArgumentException("Invalid time range", e);
+    }
   }
 
-  /**
+    public Scan getHbaseScan() {
+        return hbaseScan;
+    }
+
+    public ResultScanner getHbaseResultScanner() {
+        return hbaseResultScanner;
+    }
+
+    public void setHbaseResultScanner(ResultScanner hbaseResultScanner) {
+        this.hbaseResultScanner = hbaseResultScanner;
+    }
+
+    public Table getHbaseTable() {
+        return hbaseTable;
+    }
+
+    public void setHbaseTable(Table hbaseTable) {
+        this.hbaseTable = hbaseTable;
+    }
+
+
+    /**
    * Scans a number of rows.  Calling this method is equivalent to:
    * <pre>
    *   this.{@link #setMaxNumRows setMaxNumRows}(nrows);
@@ -692,48 +773,90 @@ public final class Scanner {
    * @see #setMaxNumKeyValues
    */
   public Deferred<ArrayList<ArrayList<KeyValue>>> nextRows() {
-    if (region == DONE) {  // We're already done scanning.
-      return Deferred.fromResult(null);
-    } else if (region == null) {  // We need to open the scanner first.
-      return client.openScanner(this).addCallbackDeferring(
-        new Callback<Deferred<ArrayList<ArrayList<KeyValue>>>, Object>() {
-          public Deferred<ArrayList<ArrayList<KeyValue>>> call(final Object arg) {
-            final Response resp;
-            if (arg instanceof Long) {
-              scanner_id = (Long) arg;
-              resp = null;
-            } else if (arg instanceof Response) {
-              resp = (Response) arg;
-              scanner_id = resp.scanner_id;
-            } else {
-              throw new IllegalStateException("WTF? Scanner open callback"
-                                              + " invoked with impossible"
-                                              + " argument: " + arg);
-            }
-            if (LOG.isDebugEnabled()) {
-              LOG.debug("Scanner " + Bytes.hex(scanner_id) + " opened on " + region);
-            }
-            if (resp != null) {
-              if (resp.rows == null) {
-                return scanFinished(resp);
+      try {
+          if (hbaseResultScanner == null) {
+              this.client.openScanner(this);
+          }
+
+          Result[] results = hbaseResultScanner.next(max_num_rows);
+
+          if (results == null || results.length == 0) {
+              this.client.closeScanner(this);
+              return Deferred.fromResult(null);
+          }
+
+          ArrayList<ArrayList<KeyValue>> resultList = new ArrayList<ArrayList<KeyValue>>();
+
+          for (Result result : results) {
+              ArrayList<KeyValue> keyValueList = new ArrayList<KeyValue>(result.size());
+
+              if (!result.isEmpty()) {
+                  for (NavigableMap.Entry<byte[], NavigableMap<byte[], NavigableMap<Long, byte[]>>> familyEntry : result.getMap().entrySet()) {
+                      byte[] family = familyEntry.getKey();
+                      for (NavigableMap.Entry<byte[], NavigableMap<Long, byte[]>> qualifierEntry : familyEntry.getValue().entrySet()) {
+                          byte[] qualifier = qualifierEntry.getKey();
+                          long ts = qualifierEntry.getValue().firstKey();
+                          byte[] value = qualifierEntry.getValue().get(ts);
+
+                          KeyValue kv = new KeyValue(result.getRow(), family,
+                                  qualifier, ts, value);
+                          keyValueList.add(kv);
+                      }
+                  }
               }
-              return Deferred.fromResult(resp.rows);
-            }
-            return nextRows();  // Restart the call.
+
+              resultList.add(keyValueList);
           }
-          public String toString() {
-            return "scanner opened";
-          }
-        });
-    }
+
+          return Deferred.fromResult(resultList);
+      } catch (IOException e) {
+          invalidate();
+          return Deferred.fromError(e);
+      }
+
+//
+//    if (region == DONE) {  // We're already done scanning.
+//      return Deferred.fromResult(null);
+//    } else if (region == null) {  // We need to open the scanner first.
+//      return client.openScanner(this).addCallbackDeferring(
+//        new Callback<Deferred<ArrayList<ArrayList<KeyValue>>>, Object>() {
+//          public Deferred<ArrayList<ArrayList<KeyValue>>> call(final Object arg) {
+//            final Response resp;
+//            if (arg instanceof Long) {
+//              scanner_id = (Long) arg;
+//              resp = null;
+//            } else if (arg instanceof Response) {
+//              resp = (Response) arg;
+//              scanner_id = resp.scanner_id;
+//            } else {
+//              throw new IllegalStateException("WTF? Scanner open callback"
+//                                              + " invoked with impossible"
+//                                              + " argument: " + arg);
+//            }
+//            if (LOG.isDebugEnabled()) {
+//              LOG.debug("Scanner " + Bytes.hex(scanner_id) + " opened on " + region);
+//            }
+//            if (resp != null) {
+//              if (resp.rows == null) {
+//                return scanFinished(resp);
+//              }
+//              return Deferred.fromResult(resp.rows);
+//            }
+//            return nextRows();  // Restart the call.
+//          }
+//          public String toString() {
+//            return "scanner opened";
+//          }
+//        });
+//    }
 
     // Need to silence this warning because the callback `got_next_row'
     // declares its return type to be Object, because its return value
     // may or may not be deferred.
-    @SuppressWarnings("unchecked")
-    final Deferred<ArrayList<ArrayList<KeyValue>>> d = (Deferred)
-      client.scanNextRows(this).addCallbacks(got_next_row, nextRowErrback());
-    return d;
+//    @SuppressWarnings("unchecked")
+//    final Deferred<ArrayList<ArrayList<KeyValue>>> d = (Deferred)
+//      client.scanNextRows(this).addCallbacks(got_next_row, nextRowErrback());
+//    return d;
   }
 
   /**
@@ -741,79 +864,79 @@ public final class Scanner {
    * This returns an {@code ArrayList<ArrayList<KeyValue>>} (possibly inside a
    * deferred one).
    */
-  private final Callback<Object, Object> got_next_row =
-    new Callback<Object, Object>() {
-      public Object call(final Object response) {
-        ArrayList<ArrayList<KeyValue>> rows = null;
-        Response resp = null;
-        if (response instanceof Response) {  // HBase 0.95 and up
-          resp = (Response) response;
-          rows = resp.rows;
-        } else if (response instanceof ArrayList) {  // HBase 0.94 and before.
-          @SuppressWarnings("unchecked")  // I 3>> generics.
-          final ArrayList<ArrayList<KeyValue>> r =
-            (ArrayList<ArrayList<KeyValue>>) response;
-          rows = r;
-        } else if (response != null) {
-          throw new InvalidResponseException(ArrayList.class, response);
-        }
-
-        if (rows == null) {  // We're done scanning this region.
-          return scanFinished(resp);
-        }
-
-        final ArrayList<KeyValue> lastrow = rows.get(rows.size() - 1);
-        start_key = lastrow.get(0).key();
-        return rows;
-      }
-      public String toString() {
-        return "get nextRows response";
-      }
-    };
+//  private final Callback<Object, Object> got_next_row =
+//    new Callback<Object, Object>() {
+//      public Object call(final Object response) {
+//        ArrayList<ArrayList<KeyValue>> rows = null;
+//        Response resp = null;
+//        if (response instanceof Response) {  // HBase 0.95 and up
+//          resp = (Response) response;
+//          rows = resp.rows;
+//        } else if (response instanceof ArrayList) {  // HBase 0.94 and before.
+//          @SuppressWarnings("unchecked")  // I 3>> generics.
+//          final ArrayList<ArrayList<KeyValue>> r =
+//            (ArrayList<ArrayList<KeyValue>>) response;
+//          rows = r;
+//        } else if (response != null) {
+//          throw new InvalidResponseException(ArrayList.class, response);
+//        }
+//
+//        if (rows == null) {  // We're done scanning this region.
+//          return scanFinished(resp);
+//        }
+//
+//        final ArrayList<KeyValue> lastrow = rows.get(rows.size() - 1);
+//        start_key = lastrow.get(0).key();
+//        return rows;
+//      }
+//      public String toString() {
+//        return "get nextRows response";
+//      }
+//    };
 
   /**
    * Creates a new errback to handle errors while trying to get more rows.
    */
-  private final Callback<Object, Object> nextRowErrback() {
-    return new Callback<Object, Object>() {
-      public Object call(final Object error) {
-        final RegionInfo old_region = region;  // Save before invalidate().
-        invalidate();  // If there was an error, don't assume we're still OK.
-        if (error instanceof NotServingRegionException) {
-          // We'll resume scanning on another region, and we want to pick up
-          // right after the last key we successfully returned.  Padding the
-          // last key with an extra 0 gives us the next possible key.
-          // TODO(tsuna): If we get 2 NSRE in a row, well pad the key twice!
-          start_key = Arrays.copyOf(start_key, start_key.length + 1);
-          return nextRows();  // XXX dangerous endless retry
-        } else if (error instanceof UnknownScannerException) {
-          // This can happen when our scanner lease expires.  Unfortunately
-          // there's no way for us to distinguish between an expired lease
-          // and a real problem, for 2 reasons: the server doesn't keep track
-          // of recently expired scanners and the lease time is only known by
-          // the server and never communicated to the client.  The normal
-          // HBase client assumes that the client will share the same
-          // hbase-site.xml configuration so that both the client and the
-          // server will know the same lease time, but this assumption is bad
-          // as nothing guarantees that the client's configuration will be in
-          // sync with the server's.  This unnecessarily increases deployment
-          // complexity and it's brittle.
-          final Scanner scnr = Scanner.this;
-          LOG.warn(old_region + " pretends to not know " + scnr + ".  I will"
-            + " retry to open a scanner but this is typically because you've"
-            + " been holding the scanner open and idle for too long (possibly"
-            + " due to a long GC pause on your side or in the RegionServer)",
-            error);
-          // Let's re-open ourselves and keep scanning.
-          return nextRows();  // XXX dangerous endless retry
-        }
-        return error;  // Let the error propagate.
-      }
-      public String toString() {
-        return "NextRow errback";
-      }
-    };
-  }
+//  private final Callback<Object, Object> nextRowErrback() {
+//    return new Callback<Object, Object>() {
+//      public Object call(final Object error) {
+//        final RegionInfo old_region = region;  // Save before invalidate().
+//        invalidate();  // If there was an error, don't assume we're still OK.
+//        if (error instanceof NotServingRegionException) {
+//          // We'll resume scanning on another region, and we want to pick up
+//          // right after the last key we successfully returned.  Padding the
+//          // last key with an extra 0 gives us the next possible key.
+//          // TODO(tsuna): If we get 2 NSRE in a row, well pad the key twice!
+//          start_key = Arrays.copyOf(start_key, start_key.length + 1);
+//          return nextRows();  // XXX dangerous endless retry
+//        } else if (error instanceof UnknownScannerException) {
+//          // This can happen when our scanner lease expires.  Unfortunately
+//          // there's no way for us to distinguish between an expired lease
+//          // and a real problem, for 2 reasons: the server doesn't keep track
+//          // of recently expired scanners and the lease time is only known by
+//          // the server and never communicated to the client.  The normal
+//          // HBase client assumes that the client will share the same
+//          // hbase-site.xml configuration so that both the client and the
+//          // server will know the same lease time, but this assumption is bad
+//          // as nothing guarantees that the client's configuration will be in
+//          // sync with the server's.  This unnecessarily increases deployment
+//          // complexity and it's brittle.
+//          final Scanner scnr = Scanner.this;
+//          LOG.warn(old_region + " pretends to not know " + scnr + ".  I will"
+//            + " retry to open a scanner but this is typically because you've"
+//            + " been holding the scanner open and idle for too long (possibly"
+//            + " due to a long GC pause on your side or in the RegionServer)",
+//            error);
+//          // Let's re-open ourselves and keep scanning.
+//          return nextRows();  // XXX dangerous endless retry
+//        }
+//        return error;  // Let the error propagate.
+//      }
+//      public String toString() {
+//        return "NextRow errback";
+//      }
+//    };
+//  }
 
   /**
    * Closes this scanner (don't forget to call this when you're done with it!).
@@ -824,9 +947,10 @@ public final class Scanner {
    * The {@link Object} has not special meaning and can be {@code null}.
    */
   public Deferred<Object> close() {
-    if (region == null || region == DONE) {
+    if (hbaseResultScanner == null) {
       return Deferred.fromResult(null);
     }
+
     return client.closeScanner(this).addBoth(closedCallback());
   }
 
@@ -866,34 +990,34 @@ public final class Scanner {
     };
   }
 
-  private Deferred<ArrayList<ArrayList<KeyValue>>> scanFinished(final Response resp) {
-    final byte[] region_stop_key = region.stopKey();
-    // Check to see if this region is the last we should scan (either
-    // because (1) it's the last region or (3) because its stop_key is
-    // greater than or equal to the stop_key of this scanner provided
-    // that (2) we're not trying to scan until the end of the table).
-    if (region_stop_key == EMPTY_ARRAY                           // (1)
-        || (stop_key != EMPTY_ARRAY                              // (2)
-            && Bytes.memcmp(stop_key, region_stop_key) <= 0)) {  // (3)
-      get_next_rows_request = null;        // free();
-      families = null;                     // free();
-      qualifiers = null;                   // free();
-      start_key = stop_key = EMPTY_ARRAY;  // free() but mustn't be null.
-      if (resp != null && !resp.more) {
-        return null;  // The server already closed the scanner for us.
-      }
-      return close()  // Auto-close the scanner.
-        .addCallback(new Callback<ArrayList<ArrayList<KeyValue>>, Object>() {
-          public ArrayList<ArrayList<KeyValue>> call(final Object arg) {
-            return null;  // Tell the user there's nothing more to scan.
-          }
-          public String toString() {
-            return "auto-close scanner " + Bytes.hex(scanner_id);
-          }
-        });
-    }
-    return continueScanOnNextRegion();
-  }
+//  private Deferred<ArrayList<ArrayList<KeyValue>>> scanFinished(final Response resp) {
+//    final byte[] region_stop_key = region.stopKey();
+//    // Check to see if this region is the last we should scan (either
+//    // because (1) it's the last region or (3) because its stop_key is
+//    // greater than or equal to the stop_key of this scanner provided
+//    // that (2) we're not trying to scan until the end of the table).
+//    if (region_stop_key == EMPTY_ARRAY                           // (1)
+//        || (stop_key != EMPTY_ARRAY                              // (2)
+//            && Bytes.memcmp(stop_key, region_stop_key) <= 0)) {  // (3)
+//      get_next_rows_request = null;        // free();
+//      families = null;                     // free();
+//      qualifiers = null;                   // free();
+//      start_key = stop_key = EMPTY_ARRAY;  // free() but mustn't be null.
+//      if (resp != null && !resp.more) {
+//        return null;  // The server already closed the scanner for us.
+//      }
+//      return close()  // Auto-close the scanner.
+//        .addCallback(new Callback<ArrayList<ArrayList<KeyValue>>, Object>() {
+//          public ArrayList<ArrayList<KeyValue>> call(final Object arg) {
+//            return null;  // Tell the user there's nothing more to scan.
+//          }
+//          public String toString() {
+//            return "auto-close scanner " + Bytes.hex(scanner_id);
+//          }
+//        });
+//    }
+//    return continueScanOnNextRegion();
+//  }
 
   /**
    * Continues scanning on the next region.
@@ -1011,13 +1135,6 @@ public final class Scanner {
     return start_key;
   }
 
-  /**
-   * Sets the name of the region that's hosting {@code this.start_key}.
-   * @param region The region we're currently supposed to be scanning.
-   */
-  void setRegionName(final RegionInfo region) {
-    this.region = region;
-  }
 
   /**
    * Invalidates this scanner and makes it assume it's no longer opened.
@@ -1026,7 +1143,7 @@ public final class Scanner {
    * scanner will have to re-locate the RegionServer and re-open itself.
    */
   void invalidate() {
-    region = null;
+      this.client.closeScanner(this);
   }
 
   /**
@@ -1036,442 +1153,17 @@ public final class Scanner {
     return region;
   }
 
-  /**
-   * Returns an RPC to fetch the next rows.
-   */
-  HBaseRpc getNextRowsRequest() {
-    if (get_next_rows_request == null) {
-      get_next_rows_request = new GetNextRowsRequest();
-    }
-    return get_next_rows_request;
-  }
 
-  /**
-   * Returns an RPC to open this scanner.
-   */
-  HBaseRpc getOpenRequest() {
-    return new OpenScannerRequest();
-  }
-
-  /**
-   * Returns an RPC to close this scanner.
-   */
-  HBaseRpc getCloseRequest() {
-    return new CloseScannerRequest(scanner_id);
-  }
 
   /**
    * Throws an exception if scanning already started.
    * @throws IllegalStateException if scanning already started.
    */
   private void checkScanningNotStarted() {
-    if (region != null) {
+    if (/*region != null*/ hbaseResultScanner != null) {
       throw new IllegalStateException("scanning already started");
     }
   }
 
-  /**
-   * Wraps the RPC response for scan requests from HBase 0.95+.
-   * When de-serializing a response to a "Scan" RPC from HBase 0.95+ we
-   * create this temporarily object at the time of the de-serialization
-   * of the RPC so that our callback can access a few more fields along
-   * with the actual payload of the response.
-   */
-  final static class Response {
-    /** The ID associated with the scanner that issued the request.  */
-    private final long scanner_id;
-    /** The actual payload of the response.  */
-    private final ArrayList<ArrayList<KeyValue>> rows;
-    /**
-     * If false, the filter we use decided there was no more data to scan.
-     * In this case, the server has automatically closed the scanner for us,
-     * so we don't need to explicitly close it.
-     */
-    private final boolean more;
-
-    Response(final long scanner_id,
-             final ArrayList<ArrayList<KeyValue>> rows,
-             final boolean more) {
-      this.scanner_id = scanner_id;
-      this.rows = rows;
-      this.more = more;
-    }
-
-    public String toString() {
-      return "Scanner$Response(scanner_id=" + Bytes.hex(scanner_id)
-        + ", rows=" + rows + ", more=" + more + ")";
-    }
-  }
-
-  /**
-   * Extracts the rows from the given {@link ScanResponse}.
-   * @param resp The protobuf of the RPC response.
-   * @param buf The buffer the response was read from.  The actual KeyValues
-   * of the response will be read from there if cell blocks are in use.
-   * @param cell_size The number of bytes of the cell block that follows,
-   * in the buffer.
-   */
-  private ArrayList<ArrayList<KeyValue>> getRows(final ScanResponse resp,
-                                                 final ChannelBuffer buf,
-                                                 final int cell_size) {
-    final int nrows = (cell_size == 0
-                       ? resp.getResultsCount()
-                       : resp.getCellsPerResultCount());
-    if (nrows == 0) {
-      return null;
-    }
-    HBaseRpc.checkArrayLength(buf, nrows);
-    final ArrayList<ArrayList<KeyValue>> rows =
-      new ArrayList<ArrayList<KeyValue>>(nrows);
-    if (cell_size != 0) {
-      KeyValue kv = null;
-      for (int i = 0; i < nrows; i++) {
-        final int nkvs = resp.getCellsPerResult(i);
-        HBaseRpc.checkArrayLength(buf, nkvs);
-        final ArrayList<KeyValue> row = new ArrayList<KeyValue>(nkvs);
-        for (int j = 0; j < nkvs; j++) {
-          final int kv_length = buf.readInt();
-          kv = KeyValue.fromBuffer(buf, kv);
-          row.add(kv);
-        }
-        rows.add(row);
-      }
-    } else {
-      for (int i = 0; i < nrows; i++) {
-        rows.add(GetRequest.convertResult(resp.getResults(i), buf, cell_size));
-      }
-    }
-    return rows;
-  }
-
-  /** RPC method name to use with HBase 0.95+.  */
-  private static final byte[] SCAN = new byte[] { 'S', 'c', 'a', 'n' };
-
-  private static final byte[] OPEN_SCANNER = new byte[] {
-    'o', 'p', 'e', 'n', 'S', 'c', 'a', 'n', 'n', 'e', 'r'
-  };
-
-  /**
-   * RPC sent out to open a scanner on a RegionServer.
-   */
-  private final class OpenScannerRequest extends HBaseRpc {
-
-    public OpenScannerRequest() {
-      super(Scanner.this.table, start_key);
-    }
-
-    @Override
-    byte[] method(final byte server_version) {
-      return (server_version >= RegionClient.SERVER_VERSION_095_OR_ABOVE
-              ? SCAN
-              : OPEN_SCANNER);
-    }
-
-    /**
-     * Predicts a lower bound on the serialized size of this RPC.
-     * This is to avoid using a dynamic buffer, to avoid re-sizing the buffer.
-     * Since we use a static buffer, if the prediction is wrong and turns out
-     * to be less than what we need, there will be an exception which will
-     * prevent the RPC from being serialized.  That'd be a severe bug.
-     */
-    private int predictSerializedSize() {
-      int size = 0;
-      size += 4;  // int:  Number of parameters.
-      size += 1;  // byte: Type of the 1st parameter.
-      size += 3;  // vint: region name length (3 bytes => max length = 32768).
-      size += super.region.name().length;  // The region name.
-
-      size += 1;  // byte: Type of the 2nd parameter.
-      size += 1;  // byte: Type again (see HBASE-2877).
-      size += 1;  // byte: Version of Scan.
-      size += 3;  // vint: start key length (3 bytes => max length = 32768).
-      size += start_key.length;  // The start key.
-      size += 3;  // vint: stop key length (3 bytes => max length = 32768).
-      size += stop_key.length;  // The stop key.
-      size += 4;  // int:  Max number of versions to return.
-      size += 4;  // int:  Max number of KeyValues to get per RPC.
-      size += 4;  // int:  Unused field only used by HBase's client.
-      size += 1;  // bool: Whether or not to populate the blockcache.
-      size += 1;  // byte: Whether or not to use a filter.
-      if (filter != null) {
-        size += filter.predictSerializedSize();
-      }
-      size += 8;  // long: Minimum timestamp.
-      size += 8;  // long: Maximum timestamp.
-      size += 1;  // byte: Boolean: "all time".
-      size += 4;  // int:  Number of families.
-      if (families != null) {
-        // vint: Family length (guaranteed on 1 byte) for each family.
-        size += families.length;
-        for (int i = 0; i < families.length; i++) {
-          byte[] family = families[i];
-          size += family.length;  // The family.
-          size += 4;  // int:  How many qualifiers follow?
-          if (qualifiers != null && qualifiers[i] != null) {
-            // vint: Qualifier length times number of qualifiers.
-            size += 3 * qualifiers[i].length;
-            for (byte[] qualifier : qualifiers[i]) {
-              size += qualifier.length;  // The qualifier.
-            }
-          }
-        }
-      }
-      return size;
-    }
-
-    /** Serializes this request.  */
-    ChannelBuffer serialize(final byte server_version) {
-      // Save the region in the Scanner.  This kind of a kludge but it really
-      // is the easiest way to give the Scanner the RegionInfo it needs.
-      Scanner.this.region = super.region;
-
-      if (server_version < RegionClient.SERVER_VERSION_095_OR_ABOVE) {
-        return serializeOld(server_version);
-      }
-      final Scan.Builder scan = Scan.newBuilder()
-        .setStartRow(Bytes.wrap(start_key))
-        .setStopRow(Bytes.wrap(stop_key));
-      if (families != null) {
-        for (int i = 0; i < families.length; i++) {
-          final Column.Builder columns = Column.newBuilder();
-          columns.setFamily(Bytes.wrap(families[i]));
-          if (qualifiers != null && qualifiers[i] != null) {
-            for (byte[] qualifier : qualifiers[i]) {
-              columns.addQualifier(Bytes.wrap(qualifier));
-            }
-          }
-          scan.addColumn(columns);
-        }
-      }
-      if (filter != null) {
-        scan.setFilter(FilterPB.Filter.newBuilder()
-                       .setNameBytes(Bytes.wrap(filter.name()))
-                       .setSerializedFilter(Bytes.wrap(filter.serialize()))
-                       .build());
-      }
-      if (min_timestamp != 0 || max_timestamp != Long.MAX_VALUE) {
-        final TimeRange.Builder time = TimeRange.newBuilder();
-        if (min_timestamp != 0) {
-          time.setFrom(min_timestamp);
-        }
-        if (max_timestamp != Long.MAX_VALUE) {
-          time.setTo(max_timestamp);
-        }
-        scan.setTimeRange(time.build());
-      }
-      if (versions != 1) {
-        scan.setMaxVersions(versions);
-      }
-      if (!populate_blockcache) {
-        scan.setCacheBlocks(false);
-      }
-      if (max_num_kvs > 0) {
-        scan.setBatchSize(max_num_kvs);
-      }
-      scan.setMaxResultSize(max_num_bytes);
-      final ScanRequest req = ScanRequest.newBuilder()
-        .setRegion(region.toProtobuf())
-        .setScan(scan.build())
-        .setNumberOfRows(max_num_rows)
-        .build();
-      return toChannelBuffer(SCAN, req);
-    }
-
-    /** Serializes this request for HBase 0.94 and before.  */
-    private ChannelBuffer serializeOld(final byte server_version) {
-      final ChannelBuffer buf = newBuffer(server_version,
-                                          predictSerializedSize());
-      buf.writeInt(2);  // Number of parameters.
-
-      // 1st param: byte array containing region name
-      writeHBaseByteArray(buf, super.region.name());
-
-      // 2nd param: Scan object
-      buf.writeByte(39);   // Code for a `Scan' parameter.
-      buf.writeByte(39);   // Code again (see HBASE-2877).
-      buf.writeByte(1);    // Manual versioning of Scan.
-      writeByteArray(buf, start_key);
-      writeByteArray(buf, stop_key);
-      buf.writeInt(versions);  // Max number of versions to return.
-
-      // Max number of KeyValues to get per RPC.
-      buf.writeInt(max_num_kvs);
-
-      // Unused field, only used by HBase's client.  This value should represent
-      // how many rows per call the client will fetch, but the server doesn't
-      // care about this value, neither do we, because we use a different API.
-      buf.writeInt(0xDEADBA5E);
-
-      // Whether or not to populate the blockcache.
-      buf.writeByte(populate_blockcache ? 0x01 : 0x00);
-
-      if (filter == null) {
-        buf.writeByte(0x00); // boolean (false): don't use a filter.
-      } else {
-        buf.writeByte(0x01); // boolean (true): use a filter.
-        filter.serializeOld(buf);
-      }
-
-      // TimeRange
-      buf.writeLong(min_timestamp);  // Minimum timestamp.
-      buf.writeLong(max_timestamp);  // Maximum timestamp.
-      // Boolean: "all time".
-      buf.writeByte(min_timestamp != 0 || max_timestamp != Long.MAX_VALUE
-                    ? 0x00 : 0x01);
-
-      // Families.
-      if (families != null) {
-        buf.writeInt(families.length);  // Number of families that follow.
-        for (int i = 0; i < families.length; i++) {
-          // Each family is then written like so:
-          writeByteArray(buf, families[i]);  // Column family name.
-          if (qualifiers != null && qualifiers[i] != null) {
-            buf.writeInt(qualifiers[i].length);  // How many qualifiers do we want?
-            for (byte[] qualifier : qualifiers[i]) {
-              writeByteArray(buf, qualifier);  // Column qualifier name.
-            }
-          } else {
-            buf.writeInt(0);  // No qualifiers.
-          }
-        }
-      } else {
-        buf.writeInt(0);  // No families.
-      }
-
-      return buf;
-    }
-
-    @Override
-    Response deserialize(final ChannelBuffer buf, final int cell_size) {
-      final ScanResponse resp = readProtobuf(buf, ScanResponse.PARSER);
-      if (!resp.hasScannerId()) {
-        throw new InvalidResponseException("Scan RPC response doesn't contain a"
-                                           + " scanner ID", resp);
-      }
-      return new Response(resp.getScannerId(),
-                          getRows(resp, buf, cell_size),
-                          resp.getMoreResults());
-    }
-
-    public String toString() {
-      return "OpenScannerRequest(scanner=" + Scanner.this.toString() + ')';
-    }
-
-  }
-
-  private static final byte[] NEXT = new byte[] { 'n', 'e', 'x', 't' };
-
-  /**
-   * RPC sent out to fetch the next rows from the RegionServer.
-   */
-  private final class GetNextRowsRequest extends HBaseRpc {
-
-    @Override
-    byte[] method(final byte server_version) {
-      return (server_version >= RegionClient.SERVER_VERSION_095_OR_ABOVE
-              ? SCAN
-              : NEXT);  // "next"...  Great method name!
-    }
-
-    /** Serializes this request.  */
-    ChannelBuffer serialize(final byte server_version) {
-      if (server_version < RegionClient.SERVER_VERSION_095_OR_ABOVE) {
-        final ChannelBuffer buf = newBuffer(server_version,
-                                            4 + 1 + 8 + 1 + 4);
-        buf.writeInt(2);  // Number of parameters.
-        writeHBaseLong(buf, scanner_id);
-        writeHBaseInt(buf, max_num_rows);
-        return buf;
-      }
-
-      final ScanRequest req = ScanRequest.newBuilder()
-        .setScannerId(scanner_id)
-        .setNumberOfRows(max_num_rows)
-        .build();
-      return toChannelBuffer(SCAN, req);
-    }
-
-    @Override
-    Response deserialize(final ChannelBuffer buf, final int cell_size) {
-      final ScanResponse resp = readProtobuf(buf, ScanResponse.PARSER);
-      final long id = resp.getScannerId();
-      if (scanner_id != id) {
-        throw new InvalidResponseException("Scan RPC response was for scanner"
-                                           + " ID " + id + " but we expected"
-                                           + scanner_id, resp);
-      }
-      final ArrayList<ArrayList<KeyValue>> rows = getRows(resp, buf, cell_size);
-      if (rows == null) {
-        return null;
-      }
-      return new Response(resp.getScannerId(), rows, resp.getMoreResults());
-    }
-
-    public String toString() {
-      return "GetNextRowsRequest(scanner_id=" + Bytes.hex(scanner_id)
-        + ", max_num_rows=" + max_num_rows
-        + ", region=" + region
-        + ", attempt=" + attempt + ')';
-    }
-
-  }
-
-  /**
-   * RPC sent out to close a scanner on a RegionServer.
-   */
-  private static final class CloseScannerRequest extends HBaseRpc {
-
-    private static final byte[] CLOSE = new byte[] { 'c', 'l', 'o', 's', 'e' };
-
-    private final long scanner_id;
-
-    public CloseScannerRequest(final long scanner_id) {
-      this.scanner_id = scanner_id;
-    }
-
-    @Override
-    byte[] method(final byte server_version) {
-      return (server_version >= RegionClient.SERVER_VERSION_095_OR_ABOVE
-              ? SCAN
-              : CLOSE);  // "close"...  Great method name!
-    }
-
-    /** Serializes this request.  */
-    ChannelBuffer serialize(final byte server_version) {
-      if (server_version < RegionClient.SERVER_VERSION_095_OR_ABOVE) {
-        final ChannelBuffer buf = newBuffer(server_version,
-                                            4 + 1 + 8);
-        buf.writeInt(1);  // Number of parameters.
-        writeHBaseLong(buf, scanner_id);
-        return buf;
-      }
-
-      final ScanRequest req = ScanRequest.newBuilder()
-        .setScannerId(scanner_id)
-        .setCloseScanner(true)
-        .setNumberOfRows(0)
-        .build();
-      return toChannelBuffer(SCAN, req);
-    }
-
-    @Override
-    Object deserialize(final ChannelBuffer buf, final int cell_size) {
-      HBaseRpc.ensureNoCell(cell_size);
-      final ScanResponse resp = readProtobuf(buf, ScanResponse.PARSER);
-      final long id = resp.getScannerId();
-      if (scanner_id != id) {
-        throw new InvalidResponseException("Scan RPC response was for scanner"
-                                           + " ID " + id + " but we expected"
-                                           + scanner_id, resp);
-      }
-      return null;
-    }
-
-    public String toString() {
-      return "CloseScannerRequest(scanner_id=" + Bytes.hex(scanner_id)
-        + ", attempt=" + attempt + ')';
-    }
-
-  }
 
 }

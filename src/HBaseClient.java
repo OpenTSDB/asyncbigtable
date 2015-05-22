@@ -26,35 +26,23 @@
  */
 package org.hbase.async;
 
-import java.io.IOException;
-import java.net.InetAddress;
-import java.net.InetSocketAddress;
-import java.net.SocketAddress;
-import java.net.UnknownHostException;
-import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentSkipListMap;
-import java.util.concurrent.Executor;
-import java.util.concurrent.Executors;
-import static java.util.concurrent.TimeUnit.MILLISECONDS;
-
 import com.google.common.cache.LoadingCache;
 import com.google.protobuf.InvalidProtocolBufferException;
-
+import com.stumbleupon.async.Callback;
+import com.stumbleupon.async.Deferred;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.hbase.Cell;
 import org.apache.hadoop.hbase.HBaseConfiguration;
+import org.apache.hadoop.hbase.HColumnDescriptor;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.*;
+import org.apache.hadoop.hbase.client.MultiAction;
 import org.apache.zookeeper.AsyncCallback;
 import org.apache.zookeeper.KeeperException.Code;
 import org.apache.zookeeper.WatchedEvent;
 import org.apache.zookeeper.Watcher;
 import org.apache.zookeeper.ZooKeeper;
 import org.apache.zookeeper.data.Stat;
-
 import org.jboss.netty.channel.ChannelEvent;
-import org.jboss.netty.channel.ChannelPipeline;
 import org.jboss.netty.channel.ChannelStateEvent;
 import org.jboss.netty.channel.DefaultChannelPipeline;
 import org.jboss.netty.channel.socket.ClientSocketChannelFactory;
@@ -65,16 +53,23 @@ import org.jboss.netty.util.HashedWheelTimer;
 import org.jboss.netty.util.Timeout;
 import org.jboss.netty.util.Timer;
 import org.jboss.netty.util.TimerTask;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.stumbleupon.async.Callback;
-import com.stumbleupon.async.Deferred;
+import java.io.IOException;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.SocketAddress;
+import java.net.UnknownHostException;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 
 import org.hbase.async.generated.ZooKeeperPB;
 
-import java.util.NavigableMap;
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
 /**
  * A fully asynchronous, thread-safe, modern HBase client.
@@ -961,17 +956,50 @@ public final class HBaseClient {
    */
   public Deferred<Object> ensureTableFamilyExists(final byte[] table,
                                                   final byte[] family) {
-    // Just "fault in" the first region of the table.  Not the most optimal or
-    // useful thing to do but gets the job done for now.  TODO(tsuna): Improve.
-    final HBaseRpc dummy;
-    if (family == EMPTY_ARRAY) {
-      dummy = GetRequest.exists(table, probeKey(ZERO_ARRAY));
-    } else {
-      dummy = GetRequest.exists(table, probeKey(ZERO_ARRAY), family);
+    LOG.info("HBase API: Checking if table [{}] and family [{}] exist", org.apache.hadoop.hbase.util.Bytes.toString(table), org.apache.hadoop.hbase.util.Bytes.toString(family));
+
+    Admin admin = null;
+    try {
+      admin = hbaseConnection.getAdmin();
+      if(!admin.tableExists(TableName.valueOf(table))) {
+          return Deferred.fromError(new TableNotFoundException(table));
+      }
+    } catch (IOException e) {
+      if (admin != null) {
+          try {
+              admin.close();
+          } catch (Exception e1) {
+
+          }
+      }
     }
-    @SuppressWarnings("unchecked")
-    final Deferred<Object> d = (Deferred) sendRpcToRegion(dummy);
-    return d;
+
+    if (family != EMPTY_ARRAY) {
+        Table t = null;
+
+        try {
+            t = hbaseConnection.getTable(TableName.valueOf(table));
+            HColumnDescriptor[] descriptors = t.getTableDescriptor().getColumnFamilies();
+            for (HColumnDescriptor descriptor : descriptors) {
+                if (org.apache.hadoop.hbase.util.Bytes.compareTo(descriptor.getName(), family) == 0) {
+                    return Deferred.fromResult(null);
+                }
+            }
+            return Deferred.fromError(new NoSuchColumnFamilyException(org.apache.hadoop.hbase.util.Bytes.toString(family), null));
+        } catch (IOException e) {
+            return Deferred.fromError(e);
+        } finally {
+            try {
+                if (t != null) {
+                    t.close();
+                }
+            } catch (Exception e) {
+                return Deferred.fromError(e);
+            }
+        }
+    }
+
+    return Deferred.fromResult(null);
   }
 
   /**
@@ -1025,12 +1053,13 @@ public final class HBaseClient {
           table = hbaseConnection.getTable(TableName.valueOf(request.table()));
           Get get = new Get(request.key());
 
-          for (byte[] qualifier : request.qualifiers()) {
-              get.addColumn(request.family(), qualifier);
+          if (request.qualifiers() != null) {
+              for (byte[] qualifier : request.qualifiers()) {
+                  get.addColumn(request.family(), qualifier);
+              }
           }
 
           Result result = table.get(get);
-
           ArrayList<KeyValue> keyValueList = new ArrayList<KeyValue>(result.size());
 
           if (!result.isEmpty()) {
@@ -1048,7 +1077,7 @@ public final class HBaseClient {
               }
           }
 
-          LOG.info("HBase API: Retrieved get {}", keyValueList);
+          LOG.debug("HBase API: Retrieved get {}", keyValueList);
           return Deferred.fromResult(keyValueList);
       } catch (IOException e) {
           return Deferred.fromError(e);
@@ -1108,38 +1137,58 @@ public final class HBaseClient {
    * deferred {@link Scanner.Response} if HBase 0.95 and up.
    */
   Deferred<Object> openScanner(final Scanner scanner) {
-    num_scanners_opened.increment();
-    return sendRpcToRegion(scanner.getOpenRequest()).addCallbacks(
-      scanner_opened,
-      new Callback<Object, Object>() {
-        public Object call(final Object error) {
-          // Don't let the scanner think it's opened on this region.
-          scanner.invalidate();
-          return error;  // Let the error propagate.
-        }
-        public String toString() {
-          return "openScanner errback";
-        }
-      });
+      num_scanners_opened.increment();
+
+      LOG.info("HBase API: Scanning table with {}", scanner.toString());
+      Table table = null;
+      try {
+          table = hbaseConnection.getTable(TableName.valueOf(scanner.table()));
+          ResultScanner result = table.getScanner(scanner.getHbaseScan());
+          scanner.setHbaseResultScanner(result);
+          scanner.setHbaseTable(table);
+
+          return Deferred.fromResult(new Object());
+      } catch (IOException e) {
+          if (table != null) {
+              try {
+                  table.close();
+              } catch (Exception e1) {}
+          }
+
+          return Deferred.fromError(e);
+      }
+
+//    return sendRpcToRegion(scanner.getOpenRequest()).addCallbacks(
+//      scanner_opened,
+//      new Callback<Object, Object>() {
+//        public Object call(final Object error) {
+//          // Don't let the scanner think it's opened on this region.
+//          scanner.invalidate();
+//          return error;  // Let the error propagate.
+//        }
+//        public String toString() {
+//          return "openScanner errback";
+//        }
+//      });
   }
 
   /** Singleton callback to handle responses of "openScanner" RPCs.  */
-  private static final Callback<Object, Object> scanner_opened =
-    new Callback<Object, Object>() {
-      public Object call(final Object response) {
-        if (response instanceof Scanner.Response) {  // HBase 0.95 and up
-          return (Scanner.Response) response;
-        } else if (response instanceof Long) {
-          // HBase 0.94 and before: we expect just a long (the scanner ID).
-          return (Long) response;
-        } else {
-          throw new InvalidResponseException(Long.class, response);
-        }
-      }
-      public String toString() {
-        return "type openScanner response";
-      }
-    };
+//  private static final Callback<Object, Object> scanner_opened =
+//    new Callback<Object, Object>() {
+//      public Object call(final Object response) {
+//        if (response instanceof Scanner.Response) {  // HBase 0.95 and up
+//          return (Scanner.Response) response;
+//        } else if (response instanceof Long) {
+//          // HBase 0.94 and before: we expect just a long (the scanner ID).
+//          return (Long) response;
+//        } else {
+//          throw new InvalidResponseException(Long.class, response);
+//        }
+//      }
+//      public String toString() {
+//        return "type openScanner response";
+//      }
+//    };
 
   /**
    * Returns the client currently known to hose the given region, or NULL.
@@ -1155,31 +1204,6 @@ public final class HBaseClient {
     return region2client.get(region);
   }
 
-  /**
-   * Package-private access point for {@link Scanner}s to scan more rows.
-   * @param scanner The scanner to use.
-   * @param nrows The maximum number of rows to retrieve.
-   * @return A deferred row.
-   */
-  Deferred<Object> scanNextRows(final Scanner scanner) {
-    final RegionInfo region = scanner.currentRegion();
-    final RegionClient client = clientFor(region);
-    if (client == null) {
-      // Oops, we no longer know anything about this client or region.  Our
-      // cache was probably invalidated while the client was scanning.  This
-      // means that we lost the connection to that RegionServer, so we have to
-      // re-open this scanner if we wanna keep scanning.
-      scanner.invalidate();        // Invalidate the scanner so that ...
-      @SuppressWarnings("unchecked")
-      final Deferred<Object> d = (Deferred) scanner.nextRows();
-      return d;  // ... this will re-open it ______.^
-    }
-    num_scans.increment();
-    final HBaseRpc next_request = scanner.getNextRowsRequest();
-    final Deferred<Object> d = next_request.getDeferred();
-    client.sendRpc(next_request);
-    return d;
-  }
 
   /**
    * Package-private access point for {@link Scanner}s to close themselves.
@@ -1188,20 +1212,45 @@ public final class HBaseClient {
    * The {@link Object} has not special meaning and can be {@code null}.
    */
   Deferred<Object> closeScanner(final Scanner scanner) {
-    final RegionInfo region = scanner.currentRegion();
-    final RegionClient client = clientFor(region);
-    if (client == null) {
-      // Oops, we no longer know anything about this client or region.  Our
-      // cache was probably invalidated while the client was scanning.  So
-      // we can't close this scanner properly.
-      LOG.warn("Cannot close " + scanner + " properly, no connection open for "
-               + Bytes.pretty(region == null ? null : region.name()));
+    LOG.info("HBase API: Closing scanner {}", scanner);
+
+    try {
+      if (scanner.getHbaseResultScanner() != null) {
+          scanner.getHbaseResultScanner().close();
+      } else {
+          LOG.warn("Cannot close " + scanner + " properly, no result scanner open");
+      }
       return Deferred.fromResult(null);
-    }
-    final HBaseRpc close_request = scanner.getCloseRequest();
-    final Deferred<Object> d = close_request.getDeferred();
-    client.sendRpc(close_request);
-    return d;
+    } catch (Exception e) {
+      return Deferred.fromError(e);
+    } finally {
+        scanner.setHbaseResultScanner(null);
+        try {
+            if (scanner.getHbaseTable() != null) {
+                scanner.getHbaseTable().close();
+            } else {
+                LOG.warn("Cannot close " + scanner + " properly, no table open");
+            }
+        } catch (Exception e) {
+          return Deferred.fromError(e);
+        } finally {
+            scanner.setHbaseTable(null);
+        }
+  }
+//    final RegionInfo region = scanner.currentRegion();
+//    final RegionClient client = clientFor(region);
+//    if (client == null) {
+//      // Oops, we no longer know anything about this client or region.  Our
+//      // cache was probably invalidated while the client was scanning.  So
+//      // we can't close this scanner properly.
+//      LOG.warn("Cannot close " + scanner + " properly, no connection open for "
+//               + Bytes.pretty(region == null ? null : region.name()));
+//      return Deferred.fromResult(null);
+//    }
+//    final HBaseRpc close_request = scanner.getCloseRequest();
+//    final Deferred<Object> d = close_request.getDeferred();
+//    client.sendRpc(close_request);
+//    return d;
   }
 
   /**
@@ -1423,7 +1472,7 @@ public final class HBaseClient {
           }
           table.put(put);
 
-          LOG.info("HBase API: Saved put {}", put.getRow());
+          LOG.debug("HBase API: Saved put {}", put.getRow());
           return Deferred.fromResult(null);
       } catch (IOException e) {
           return Deferred.fromError(e);
