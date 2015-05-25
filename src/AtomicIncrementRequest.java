@@ -196,6 +196,10 @@ public final class AtomicIncrementRequest extends HBaseRpc
     this.durable = durable;
   }
 
+  boolean isDurable() {
+      return this.durable;
+  }
+
   private int predictSerializedSize() {
     int size = 0;
     size += 4;  // int:  Number of parameters.

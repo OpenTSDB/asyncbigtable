@@ -784,8 +784,8 @@ final class RegionClient extends ReplayingDecoder<VoidEnum> {
               // We need to do NSRE handling here too, as the response might
               // have come back successful, but only some parts of the batch
               // could have encountered an NSRE.
-              hbase_client.handleNSRE(rpc, rpc.getRegion().name(),
-                                      (NotServingRegionException) r);
+//              hbase_client.handleNSRE(rpc, rpc.getRegion().name(),
+//                                      (NotServingRegionException) r);
             } else {
               retryEdit(rpc, (RecoverableException) r);
             }
@@ -838,7 +838,7 @@ final class RegionClient extends ReplayingDecoder<VoidEnum> {
     // This RPC has already been delayed because of a failure,
     // so make sure we don't buffer it again.
     rpc.setBufferable(false);
-    return hbase_client.sendRpcToRegion(rpc);
+    return null; //hbase_client.sendRpcToRegion(rpc);
   }
 
   /**
@@ -921,7 +921,7 @@ final class RegionClient extends ReplayingDecoder<VoidEnum> {
           || rpc.failfast()) {
         rpc.callback(new ConnectionResetException(null));
       } else {
-        hbase_client.sendRpcToRegion(rpc);  // Re-schedule the RPC.
+       // hbase_client.sendRpcToRegion(rpc);  // Re-schedule the RPC.
       }
       return;
     } else if (tryagain) {
@@ -1068,7 +1068,7 @@ final class RegionClient extends ReplayingDecoder<VoidEnum> {
           new NotServingRegionException("Connection reset: "
                                         + exception.getMessage(), rpc);
         // Re-schedule the RPC by (ab)using the NSRE handling mechanism.
-        hbase_client.handleNSRE(rpc, region.name(), nsre);
+        // hbase_client.handleNSRE(rpc, region.name(), nsre);
       }
     }
   }
@@ -1342,8 +1342,8 @@ final class RegionClient extends ReplayingDecoder<VoidEnum> {
       // We only handle NSREs for RPCs targeted at a specific region, because
       // if we don't know which region caused the NSRE (e.g. during multiPut)
       // we can't do anything about it.
-      hbase_client.handleNSRE(rpc, rpc.getRegion().name(),
-                              (RecoverableException) decoded);
+//      hbase_client.handleNSRE(rpc, rpc.getRegion().name(),
+//                              (RecoverableException) decoded);
       return null;
     }
 
