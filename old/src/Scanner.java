@@ -40,6 +40,10 @@ import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.client.ResultScanner;
 import org.apache.hadoop.hbase.client.Scan;
 import org.apache.hadoop.hbase.client.Table;
+import org.apache.hadoop.hbase.filter.*;
+import org.apache.hadoop.hbase.filter.CompareFilter;
+import org.apache.hadoop.hbase.filter.RegexStringComparator;
+import org.apache.hadoop.hbase.filter.RowFilter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -426,6 +430,9 @@ public final class Scanner {
    */
   public void setKeyRegexp(final String regexp) {
     filter = new KeyRegexpFilter(regexp);
+
+    RegexStringComparator comparator = new RegexStringComparator(regexp);
+    hbaseScan.setFilter(new RowFilter(CompareFilter.CompareOp.EQUAL, comparator));
   }
 
   /**
@@ -442,6 +449,10 @@ public final class Scanner {
    */
   public void setKeyRegexp(final String regexp, final Charset charset) {
     filter = new KeyRegexpFilter(regexp, charset);
+
+    RegexStringComparator comparator = new RegexStringComparator(regexp);
+    comparator.setCharset(charset);
+    hbaseScan.setFilter(new RowFilter(CompareFilter.CompareOp.EQUAL, comparator));
   }
 
   /**

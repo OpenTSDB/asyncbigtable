@@ -38,7 +38,6 @@ import org.jboss.netty.buffer.ChannelBuffers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import org.hbase.async.generated.HBasePB;
 import static org.hbase.async.HBaseClient.EMPTY_ARRAY;
 
 /**
