@@ -51,10 +51,7 @@ import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.NavigableMap;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentSkipListMap;
-import java.util.concurrent.Executor;
-import java.util.concurrent.Executors;
+import java.util.concurrent.*;
 
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
@@ -226,21 +223,6 @@ public final class HBaseClient {
    */
   private volatile int increment_buffer_size = 65535;
 
-  /**
-   * Factory through which we will create all its channels / sockets.
-   */
-  private final ClientSocketChannelFactory channel_factory;
-
-  /**
-   * Whether or not there is a -ROOT- region.
-   * When connecting to HBase 0.95 and up, this would be set to false, so we
-   * would go straight to .META. instead.
-   */
-  volatile boolean has_root = true;
-
-
-
-
 
   /**
    * Buffer for atomic increment coalescing.
@@ -310,6 +292,10 @@ public final class HBaseClient {
  /** HBase client connection using the standard HBase drive */
   private final Connection hbaseConnection;
 
+  private final ExecutorService executor;
+
+  private final ConcurrentHashMap<TableName, BufferedMutator> mutators = new ConcurrentHashMap<TableName, BufferedMutator>();
+
   /**
    * Constructor.
    * @param quorum_spec The specification of the quorum, e.g.
@@ -327,14 +313,9 @@ public final class HBaseClient {
    * -ROOT- region.
    */
   public HBaseClient(final String quorum_spec, final String base_path) {
-    this(quorum_spec, base_path, defaultChannelFactory());
+    this(quorum_spec, base_path, Executors.newCachedThreadPool());
   }
 
-  /** Creates a default channel factory in case we haven't been given one.  */
-  private static NioClientSocketChannelFactory defaultChannelFactory() {
-    final Executor executor = Executors.newCachedThreadPool();
-    return new NioClientSocketChannelFactory(executor, executor);
-  }
 
   /**
    * Constructor for advanced users with special needs.
@@ -359,21 +340,19 @@ public final class HBaseClient {
    * @since 1.2
    */
   public HBaseClient(final String quorum_spec, final String base_path,
-                     final Executor executor) {
-    this(quorum_spec, base_path, new CustomChannelFactory(executor));
+                     final ExecutorService executor) {
+
+      this.executor = executor;
+      this.hbaseConfig = HBaseConfiguration.create();
+      LOG.info("HBase API: Connecting with config: {}", this.hbaseConfig);
+      try {
+          this.hbaseConnection = ConnectionFactory.createConnection(hbaseConfig);
+      } catch (IOException e) {
+          throw new NonRecoverableException("Failed to create conection with config: " + hbaseConfig, e);
+      }
   }
 
-  /** A custom channel factory that doesn't shutdown its executor.  */
-  private static final class CustomChannelFactory
-    extends NioClientSocketChannelFactory {
-      CustomChannelFactory(final Executor executor) {
-        super(executor, executor);
-      }
-      @Override
-      public void releaseExternalResources() {
-        // Do nothing, we don't want to shut down the executor.
-      }
-  }
+
 
   /**
    * Constructor for advanced users with special needs.
@@ -389,18 +368,7 @@ public final class HBaseClient {
    * shutdown and release of the factory and its underlying thread pool.
    * @since 1.2
    */
-  public HBaseClient(final String quorum_spec, final String base_path,
-                     final ClientSocketChannelFactory channel_factory) {
-    this.channel_factory = channel_factory;
-    this.hbaseConfig = HBaseConfiguration.create();
-  //  this.hbaseConfig.set("hbase.zookeeper.quorum", quorum_spec);
-    LOG.info("HBase API: Connecting with config: {}", this.hbaseConfig);
-    try {
-        this.hbaseConnection = ConnectionFactory.createConnection(hbaseConfig);
-    } catch (IOException e) {
-        throw new NonRecoverableException("Failed to create conection with config: " + hbaseConfig, e);
-    }
-  }
+
 
   /**
    * Returns a snapshot of usage statistics for this client.
@@ -440,7 +408,17 @@ public final class HBaseClient {
    * it does really is it sends any buffered RPCs to HBase.
    */
   public Deferred<Object> flush() {
-      LOG.info("Flush called");
+      LOG.info("Flushing buffered mutations");
+      final ArrayList<Deferred<Object>> d = new ArrayList<Deferred<Object>>(mutators.size());
+      for (BufferedMutator bm : mutators.values()) {
+          try {
+              bm.flush();
+              d.add(Deferred.fromResult(null));
+          } catch (IOException e) {
+              LOG.error("Error occurred while flushing buffer", e);
+              d.add(Deferred.fromError(e));
+          }
+      }
 //    {
 //      // If some RPCs are waiting for -ROOT- to be discovered, we too must wait
 //      // because some of those RPCs could be edits that we must wait on.
@@ -491,10 +469,9 @@ public final class HBaseClient {
 //        }
 //      }
 //    }
-//    @SuppressWarnings("unchecked")
-//    final Deferred<Object> flushed = (Deferred) Deferred.group(d);
-//    return flushed;
-      return Deferred.fromResult(null);
+    @SuppressWarnings("unchecked")
+    final Deferred<Object> flushed = (Deferred) Deferred.group(d);
+    return flushed;
   }
 
   /**
@@ -652,18 +629,39 @@ public final class HBaseClient {
    * failure.  TODO(tsuna): Document possible / common failure scenarios.
    */
   public Deferred<Object> shutdown() {
-
       // 1. Flush everything.
       flush();
-      if (hbaseConnection != null) {
+
+      // Close all open BufferedMutator instances
+      ArrayList<Deferred<Object>> d = new ArrayList<Deferred<Object>>(mutators.size() + 1);
+      for (BufferedMutator bm : mutators.values()) {
           try {
-              hbaseConnection.close();
+              bm.close();
+              d.add(Deferred.fromResult(null));
           } catch (IOException e) {
-              LOG.error("Error occurred while disconnecting from HBase", e);
+              d.add(Deferred.fromError(e));
           }
       }
 
-      return Deferred.fromResult(null);
+      if (executor != null) {
+          executor.shutdown();
+      }
+
+      // Close HBase connection
+      if (hbaseConnection != null) {
+          try {
+              hbaseConnection.close();
+              d.add(Deferred.fromResult(null));
+          } catch (IOException e) {
+              LOG.error("Error occurred while disconnecting from HBase", e);
+              d.add(Deferred.fromError(e));
+          }
+      }
+
+      @SuppressWarnings("unchecked")
+      final Deferred<Object> shutdown = (Deferred) Deferred.group(d);
+      return shutdown;
+
     // This is part of step 3.  We need to execute this in its own thread
     // because Netty gets stuck in an infinite loop if you try to shut it
     // down from within a thread of its own thread pool.  They don't want
@@ -1321,33 +1319,21 @@ public final class HBaseClient {
     num_puts.increment();
 
     long start = System.currentTimeMillis();
-    Table table = null;
     try {
-      table = hbaseConnection.getTable(TableName.valueOf(request.table()));
-     // BufferedMutator bm = hbaseConnection.getBufferedMutator(TableName.valueOf(request.table());
       Put put = new Put(request.key());
 
       long ts = request.timestamp();
       for (int i = 0; i < request.qualifiers().length; i++) {
           put.addColumn(request.family, request.qualifiers()[i], ts, request.values()[i]);
       }
-      table.put(put);
+      BufferedMutator bm = getBufferedMutator(TableName.valueOf(request.table()));
+      bm.mutate(put);
 
       long end = System.currentTimeMillis();
-
-    //  LOG.info("Saved put {} in {}ms", request, end-start);
+//      LOG.info("Saved put {} in {}ms", request, end-start);
       return Deferred.fromResult(null);
     } catch (IOException e) {
       return Deferred.fromError(e);
-    } finally {
-      if (table != null) {
-          try {
-             table.close();
-          } catch (IOException e) {
-            // return Deferred.fromError(e);
-              LOG.error("Failed to close table {}", table, e);
-          }
-      }
     }
   }
 
@@ -1380,8 +1366,6 @@ public final class HBaseClient {
    */
   public Deferred<Boolean> compareAndSet(final PutRequest edit,
                                          final byte[] expected) {
-
-
     long ts1 = System.currentTimeMillis();
 
     Table table = null;
@@ -1400,19 +1384,9 @@ public final class HBaseClient {
 
       long ts2 = System.currentTimeMillis();
 
-      LOG.info("HBase API compareAndSet for cell: [{}], expected: [{}] returned success: {} in {}ms", edit,
-              org.apache.hadoop.hbase.util.Bytes.toString(expected), success, ts2-ts1);
+      LOG.debug("HBase API compareAndSet for cell: [{}], expected: [{}] returned success: {} in {}ms", edit,
+              org.apache.hadoop.hbase.util.Bytes.toString(expected), success, ts2 - ts1);
 
-      if (!success) {
-        Get get = new Get(edit.key());
-        get.addColumn(edit.family(), edit.qualifier());
-        boolean exists = table.exists(get);
-        Result result = table.get(get);
-        byte[] v = result.getValue(edit.family(), edit.qualifier());
-
-        LOG.warn("After checkAndPut found cell: {}, exists: {}, result:{}, column: [{}] ,value:[{}]",
-                edit, exists, result, Bytes.toString(edit.qualifier()), Bytes.toString(v));
-      }
       return Deferred.fromResult(success);
     } catch (IOException e) {
       return Deferred.fromError(e);
@@ -1610,6 +1584,37 @@ public final class HBaseClient {
                                        : "port is too large: ") + port);
     }
     return port;
+  }
+
+
+  private BufferedMutator getBufferedMutator(TableName table) throws IOException {
+    BufferedMutator mutator = mutators.get(table);
+
+    if (mutator == null) {
+      synchronized (mutators) {
+
+      BufferedMutator.ExceptionListener listener =
+              new BufferedMutator.ExceptionListener() {
+                  @Override
+                  public void onException(RetriesExhaustedWithDetailsException e,
+                                          BufferedMutator mutator) {
+                      for (int i = 0; i < e.getNumExceptions(); i++) {
+                          LOG.error("Failed to sent put: " + e.getRow(i));
+                      }
+                  }
+              };
+        BufferedMutatorParams params = new BufferedMutatorParams(table)
+                .listener(listener);
+          if (executor != null) {
+              params = params.pool(executor);
+          }
+
+        mutator = hbaseConnection.getBufferedMutator(params);
+        mutators.put(table, mutator);
+      }
+    }
+
+    return mutator;
   }
 
 }
