@@ -17,3 +17,10 @@ one instance of HBaseClient in your application, regardless of the number
 of tables or threads you want to use.  The Javadoc also spells out rules
 you have to follow in order to use the API properly in a multi-threaded
 application.
+
+
+Run the following to build the jar and fat jar:
+
+  mvn clean package
+  cp target/asynchbase-1.6.0-jar-with-dependencies.jar /path/to/opentsdb/build/third_party/hbase/asynchbase-1.6.0.jar
+
