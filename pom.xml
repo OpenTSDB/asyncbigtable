@@ -74,7 +74,6 @@
 
     <plugins>
 
-
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
@@ -153,22 +152,25 @@
       </plugin>
 
       <plugin>
-         <groupId>org.apache.maven.plugins</groupId>
-         <artifactId>maven-assembly-plugin</artifactId>
-         <version>2.5.5</version>
-          <configuration>
-              <descriptorRefs>
-                  <descriptorRef>jar-with-dependencies</descriptorRef>
-              </descriptorRefs>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-assembly-plugin</artifactId>
+        <version>2.5.5</version>
+        <configuration>
+          <!--descriptorRefs>
+          <descriptorRef>jar-with-dependencies</descriptorRef>
+          </descriptorRefs-->
+          <descriptors>
+            <descriptor>assembly.xml</descriptor>
+          </descriptors>
           </configuration>
           <executions>
-              <execution>
-                  <id>make-assembly</id> <!-- this is used for inheritance merges -->
-                  <phase>package</phase> <!-- bind to the packaging phase -->
-                  <goals>
-                      <goal>single</goal>
-                  </goals>
-              </execution>
+            <execution>
+              <id>make-assembly</id> <!-- this is used for inheritance merges -->
+              <phase>package</phase> <!-- bind to the packaging phase -->
+              <goals>
+                <goal>single</goal>
+              </goals>
+            </execution>
           </executions>
       </plugin>
 
@@ -189,39 +191,11 @@
       <version>1.4.0</version>
     </dependency>
 
-    <!--dependency>
-      <groupId>org.apache.hbase</groupId>
-      <artifactId>hbase-client</artifactId>
-      <version>1.0.1.1</version>
-      <exclusions>
-        <exclusion>
-          <groupId>com.google.protobuf</groupId>
-          <artifactId>protobuf-java</artifactId>
-        </exclusion>
-        <exclusion>
-          <groupId>org.apache.hadoop</groupId>
-          <artifactId>hadoop-mapreduce-client-core</artifactId>
-        </exclusion>
-      </exclusions>
-    </dependency-->
-
-    <!--dependency>
-      <groupId>org.apache.hbase</groupId>
-      <artifactId>hbase-common</artifactId>
-      <version>1.0.1.1</version>
-      <exclusions>
-        <exclusion>
-          <groupId>com.google.protobuf</groupId>
-          <artifactId>protobuf-java</artifactId>
-        </exclusion>
-      </exclusions>
-    </dependency-->
-
-    <dependency>
-      <groupId>org.apache.hadoop</groupId>
-      <artifactId>hadoop-common</artifactId>
-      <version>2.5.1</version>
-    </dependency>
+    <!--<dependency>-->
+      <!--<groupId>org.apache.hadoop</groupId>-->
+      <!--<artifactId>hadoop-common</artifactId>-->
+      <!--<version>2.5.1</version>-->
+    <!--</dependency>-->
 
     <dependency>
       <groupId>org.slf4j</groupId>
@@ -255,10 +229,10 @@
       <groupId>io.netty</groupId>
       <artifactId>netty</artifactId>
       <version>3.9.4.Final</version>
-      <scope>provided</scope>
+      <!--<scope>provided</scope>-->
     </dependency>
 
-      <!-- runtime dependencies -->
+    <!-- runtime dependencies -->
 
     <dependency>
       <groupId>org.slf4j</groupId>
