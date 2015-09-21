@@ -4,19 +4,18 @@
   xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
 
-  <groupId>org.hbase</groupId>
-  <artifactId>asynchbase</artifactId>
-  <version>1.6.0</version>
-  <name>Asynchronous HBase Client</name>
+  <groupId>com.pythian.opentsdb</groupId>
+  <artifactId>asyncbigtable</artifactId>
+  <version>0.1.0-SNAPSHOT</version>
+  <name>Asynchronous HBase Client - Replacement to integrate OpenTSDB with BigTable</name>
   <organization>
     <name>The Async HBase Authors</name>
     <url>http://opentsdb.net</url>
   </organization>
   <description>
-    An alternative HBase client library for applications requiring fully
-    asynchronous, non-blocking and thread-safe HBase connectivity.
+    A drop in replacement for the AsyncHBase library and integrate OpenTSDB with Google Bigtable.
   </description>
-  <url>https://github.com/OpenTSDB/asynchbase</url>
+  <url>https://github.com/OpenTSDB/asyncbigtable</url>
   <licenses>
     <license>
       <name>BSD</name>
@@ -25,12 +24,12 @@
     </license>
   </licenses>
   <scm>
-    <connection>scm:git:git@github.com:OpenTSDB/asynchbase.git</connection>
-    <url>https://github.com/OpenTSDB/asynchbase</url>
+    <connection>scm:git:git@github.com:OpenTSDB/asyncbigtable.git</connection>
+    <url>https://github.com/OpenTSDB/asyncbigtable</url>
   </scm>
   <issueManagement>
     <system>GitHub</system>
-    <url>https://github.com/OpenTSDB/asynchbase/issues</url>
+    <url>https://github.com/OpenTSDB/asyncbigtable/issues</url>
   </issueManagement>
   <mailingLists>
     <mailingList>
@@ -156,9 +155,6 @@
         <artifactId>maven-assembly-plugin</artifactId>
         <version>2.5.5</version>
         <configuration>
-          <!--descriptorRefs>
-          <descriptorRef>jar-with-dependencies</descriptorRef>
-          </descriptorRefs-->
           <descriptors>
             <descriptor>assembly.xml</descriptor>
           </descriptors>
@@ -190,12 +186,6 @@
       <artifactId>async</artifactId>
       <version>1.4.0</version>
     </dependency>
-
-    <!--<dependency>-->
-      <!--<groupId>org.apache.hadoop</groupId>-->
-      <!--<artifactId>hadoop-common</artifactId>-->
-      <!--<version>2.5.1</version>-->
-    <!--</dependency>-->
 
     <dependency>
       <groupId>org.slf4j</groupId>
