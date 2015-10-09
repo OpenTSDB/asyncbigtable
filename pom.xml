@@ -5,10 +5,10 @@
 
   <groupId>com.pythian.opentsdb</groupId>
   <artifactId>asyncbigtable</artifactId>
-  <version>0.1.0-SNAPSHOT</version>
+  <version>0.1.0</version>
   <packaging>jar</packaging>
 
-  <name>Asynchronous HBase Client replacement to integrate OpenTSDB with BigTable</name>
+  <name>Async Bigtable library</name>
   <organization>
     <name>Pythian</name>
     <url>http://www.pythian.com</url>
@@ -77,62 +77,74 @@
       <id>release</id>
       <build>
         <plugins>
-        <plugin>
-          <groupId>org.apache.maven.plugins</groupId>
-          <artifactId>maven-source-plugin</artifactId>
-          <version>2.2.1</version>
-          <executions>
-            <execution>
-              <id>attach-sources</id>
-              <goals>
-                <goal>jar</goal>
-              </goals>
-            </execution>
-          </executions>
-        </plugin>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-source-plugin</artifactId>
+            <version>2.2.1</version>
+            <executions>
+              <execution>
+                <id>attach-sources</id>
+                <goals>
+                  <goal>jar</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
 
-        <plugin>
-          <groupId>org.apache.maven.plugins</groupId>
-          <artifactId>maven-javadoc-plugin</artifactId>
-          <version>2.10.3</version>
-          <executions>
-            <execution>
-              <id>attach-javadocs</id>
-              <goals>
-                <goal>jar</goal>
-              </goals>
-              <configuration>
-                <additionalparam>${javadoc.opts}</additionalparam>
-              </configuration>
-            </execution>
-          </executions>
-          <configuration>
-            <quiet>true</quiet>
-            <validateLinks>true</validateLinks>
-            <bottom>
-              Copyright &#169; {inceptionYear}-{currentYear},
-              ${project.organization.name}
-            </bottom>
-          </configuration>
-        </plugin>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-javadoc-plugin</artifactId>
+            <version>2.10.3</version>
+            <executions>
+              <execution>
+                <id>attach-javadocs</id>
+                <goals>
+                  <goal>jar</goal>
+                </goals>
+                <configuration>
+                  <additionalparam>${javadoc.opts}</additionalparam>
+                </configuration>
+              </execution>
+            </executions>
+            <configuration>
+              <quiet>true</quiet>
+              <validateLinks>true</validateLinks>
+              <bottom>
+                Copyright &#169; {inceptionYear}-{currentYear},
+                ${project.organization.name}
+              </bottom>
+            </configuration>
+          </plugin>
 
-        <plugin>
-          <groupId>org.apache.maven.plugins</groupId>
-          <artifactId>maven-gpg-plugin</artifactId>
-          <version>1.4</version>
-          <executions>
-            <execution>
-              <id>sign-artifacts</id>
-              <phase>verify</phase>
-              <goals>
-                <goal>sign</goal>
-              </goals>
-            </execution>
-          </executions>
-          <configuration>
-            <keyname>soulios@pythian.com</keyname>
-          </configuration>
-        </plugin>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-gpg-plugin</artifactId>
+            <version>1.4</version>
+            <executions>
+              <execution>
+                <id>sign-artifacts</id>
+                <phase>verify</phase>
+                <goals>
+                  <goal>sign</goal>
+                </goals>
+              </execution>
+            </executions>
+            <configuration>
+              <keyname>soulios@pythian.com</keyname>
+            </configuration>
+          </plugin>
+
+          <plugin>
+            <groupId>org.sonatype.plugins</groupId>
+            <artifactId>nexus-staging-maven-plugin</artifactId>
+            <version>1.6.6</version>
+            <extensions>true</extensions>
+            <configuration>
+              <serverId>ossrh</serverId>
+              <nexusUrl>https://oss.sonatype.org/</nexusUrl>
+              <autoReleaseAfterClose>true</autoReleaseAfterClose>
+            </configuration>
+          </plugin>
         </plugins>
       </build>
     </profile>
@@ -156,8 +168,6 @@
         </configuration>
       </plugin>
 
-
-
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
@@ -175,28 +185,16 @@
           <descriptors>
             <descriptor>assembly.xml</descriptor>
           </descriptors>
-          </configuration>
-          <executions>
-            <execution>
-              <id>make-assembly</id> <!-- this is used for inheritance merges -->
-              <phase>package</phase> <!-- bind to the packaging phase -->
-              <goals>
-                <goal>single</goal>
-              </goals>
-            </execution>
-          </executions>
-      </plugin>
-
-      <plugin>
-        <groupId>org.sonatype.plugins</groupId>
-        <artifactId>nexus-staging-maven-plugin</artifactId>
-        <version>1.6.6</version>
-        <extensions>true</extensions>
-        <configuration>
-          <serverId>ossrh</serverId>
-          <nexusUrl>https://oss.sonatype.org/</nexusUrl>
-          <autoReleaseAfterClose>true</autoReleaseAfterClose>
         </configuration>
+        <executions>
+          <execution>
+            <id>make-assembly</id> <!-- this is used for inheritance merges -->
+            <phase>package</phase> <!-- bind to the packaging phase -->
+            <goals>
+              <goal>single</goal>
+            </goals>
+          </execution>
+        </executions>
       </plugin>
 
     </plugins>
