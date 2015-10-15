@@ -26,8 +26,6 @@
  */
 package org.hbase.async;
 
-import org.jboss.netty.buffer.ChannelBuffer;
-
 /**
  * An intermediate abstract class for all RPC requests that can be batched.
  * <p>

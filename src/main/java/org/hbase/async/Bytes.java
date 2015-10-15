@@ -26,9 +26,8 @@
  */
 package org.hbase.async;
 
-import com.google.protobuf.ByteString;
-import org.jboss.netty.buffer.ChannelBuffer;
-import org.jboss.netty.util.CharsetUtil;
+import io.netty.buffer.ByteBuf;
+import io.netty.util.CharsetUtil;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
@@ -458,7 +457,7 @@ public final class Bytes {
    * @param buf The (possibly {@code null}) buffer to pretty-print.
    * @return The buffer in a pretty-printed string.
    */
-  public static String pretty(final ChannelBuffer buf) {
+  public static String pretty(final ByteBuf buf) {
     if (buf == null) {
       return "null";
     }
@@ -467,9 +466,9 @@ public final class Bytes {
       if (buf.getClass() != ReplayingDecoderBuffer) {
         array = buf.array();
       } else if (RDB_buf != null) {  // Netty 3.5.1 and above.
-        array = ((ChannelBuffer) RDB_buf.invoke(buf)).array();
+        array = ((ByteBuf) RDB_buf.invoke(buf)).array();
       } else {  // Netty 3.5.0 and before.
-        final ChannelBuffer wrapped_buf = (ChannelBuffer) RDB_buffer.get(buf);
+        final ByteBuf wrapped_buf = (ByteBuf) RDB_buffer.get(buf);
         array = wrapped_buf.array();
       }
     } catch (UnsupportedOperationException e) {
