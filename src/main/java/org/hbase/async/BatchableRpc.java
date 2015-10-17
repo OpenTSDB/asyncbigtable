@@ -1,6 +1,6 @@
 /*
- * Copyright (C) 2012-2012  The Async HBase Authors.  All rights reserved.
- * This file is part of Async HBase.
+ * Copyright (C) 2015  The Async BigTable Authors.  All rights reserved.
+ * This file is part of Async BigTable.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -26,8 +26,6 @@
  */
 package org.hbase.async;
 
-import org.jboss.netty.buffer.ChannelBuffer;
-
 /**
  * An intermediate abstract class for all RPC requests that can be batched.
  * <p>
@@ -43,28 +41,28 @@ abstract class BatchableRpc extends HBaseRpc
   // access them directly.
 
   /** Family affected by this RPC.  */
-  /*protected*/ final byte[] family;
+  final byte[] family;
 
   /** The timestamp to use for {@link KeyValue}s of this RPC.  */
-  /*protected*/ final long timestamp;
+  final long timestamp;
 
   /**
    * Explicit row lock to use, if any.
    * @see RowLock
    */
-  /*protected*/ final long lockid;
+  final long lockid;
 
   /**
    * Whether or not this batchable RPC can be buffered on the client side.
    * Please call {@link #canBuffer} to check if this RPC can be buffered,
    * don't test this field directly.
    */
-  /*protected*/ boolean bufferable = true;
+  boolean bufferable = true;
 
   /**
    * Whether or not the RegionServer must write to its WAL (Write Ahead Log).
    */
-  /*protected*/ boolean durable = true;
+  boolean durable = true;
 
   /**
    * Package private constructor.
@@ -92,7 +90,7 @@ abstract class BatchableRpc extends HBaseRpc
    * is used to send RPCs in batches for greater throughput, and causes this
    * RPC to be sent directly to the server.
    * @param bufferable Whether or not this RPC can be buffered (i.e. delayed)
-   * before being sent out to HBase.
+   * before being sent out to BigTable.
    * @see HBaseClient#setFlushInterval
    */
   public final void setBufferable(final boolean bufferable) {
@@ -121,7 +119,5 @@ abstract class BatchableRpc extends HBaseRpc
   public final long timestamp() {
     return timestamp;
   }
-
-
-
+  
 }

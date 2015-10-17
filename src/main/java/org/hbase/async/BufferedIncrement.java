@@ -1,6 +1,6 @@
 /*
- * Copyright (C) 2012  The Async HBase Authors.  All rights reserved.
- * This file is part of Async HBase.
+ * Copyright (C) 2015  The Async BigTable Authors.  All rights reserved.
+ * This file is part of Async BigTable.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -188,7 +188,7 @@ final class BufferedIncrement {
       }
     }
 
-    /** The amount by which we're going to increment the value in HBase.  */
+    /** The amount by which we're going to increment the value in BigTable.  */
     static final long amount(final long n) {
       return n >> UPDATE_BITS;
     }
