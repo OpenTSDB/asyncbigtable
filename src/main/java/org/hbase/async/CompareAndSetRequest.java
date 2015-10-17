@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2010, 2011  StumbleUpon, Inc.  All rights reserved.
- * This file is part of Async HBase.
+ * Copyright (C) 2015  The Async BigTable Authors.  All rights reserved.
+ * This file is part of Async BigTable.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -26,25 +26,17 @@
  */
 package org.hbase.async;
 
-import com.google.protobuf.ByteString;
-
 /**
  * Atomically executes a Compare-And-Set (CAS) on an HBase cell.
  * <p>
  * This class is package-private just to reduce the amount of public API,
  * but it could be exposed if needed.
- * @since 1.3
  */
 final class CompareAndSetRequest extends HBaseRpc
   implements HBaseRpc.HasTable, HBaseRpc.HasKey,
              HBaseRpc.HasFamily, HBaseRpc.HasQualifier, HBaseRpc.HasValue,
              HBaseRpc.IsEdit {
-
-
-  /** Comparator named used for HBase 0.95+.  */
-  private static final ByteString BINARYCOMPARATOR =
-    ByteString.copyFromUtf8("org.apache.hadoop.hbase.filter.BinaryComparator");
-
+  
   /** New value.  */
   private final PutRequest put;
 
@@ -103,6 +95,5 @@ final class CompareAndSetRequest extends HBaseRpc
   public byte[] value() {
     return put.value();
   }
-
 
 }

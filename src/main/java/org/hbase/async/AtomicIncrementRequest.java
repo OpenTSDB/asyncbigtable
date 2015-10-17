@@ -1,6 +1,6 @@
 /*
- * Copyright (C) 2010-2012  The Async HBase Authors.  All rights reserved.
- * This file is part of Async HBase.
+ * Copyright (C) 2015  The Async BigTable Authors.  All rights reserved.
+ * This file is part of Async BigTable.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -27,7 +27,7 @@
 package org.hbase.async;
 
 /**
- * Atomically increments a value in HBase.
+ * Atomically increments a value in BigTable.
  *
  * <h1>A note on passing {@code byte} arrays in argument</h1>
  * None of the method that receive a {@code byte[]} in argument will copy it.
@@ -52,8 +52,8 @@ public final class AtomicIncrementRequest extends HBaseRpc
    * @param key The row key of the value to increment.
    * @param family The column family of the value to increment.
    * @param qualifier The column qualifier of the value to increment.
-   * @param amount Amount by which to increment the value in HBase.
-   * If negative, the value in HBase will be decremented.
+   * @param amount Amount by which to increment the value in BigTable.
+   * If negative, the value in BigTable will be decremented.
    */
   public AtomicIncrementRequest(final byte[] table,
                                 final byte[] key,
@@ -93,8 +93,8 @@ public final class AtomicIncrementRequest extends HBaseRpc
    * @param key The row key of the value to increment.
    * @param family The column family of the value to increment.
    * @param qualifier The column qualifier of the value to increment.
-   * @param amount Amount by which to increment the value in HBase.
-   * If negative, the value in HBase will be decremented.
+   * @param amount Amount by which to increment the value in BigTable.
+   * If negative, the value in BigTable will be decremented.
    */
   public AtomicIncrementRequest(final String table,
                                 final String key,

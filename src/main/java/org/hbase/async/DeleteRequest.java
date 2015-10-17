@@ -1,6 +1,6 @@
 /*
- * Copyright (C) 2010-2012  The Async HBase Authors.  All rights reserved.
- * This file is part of Async HBase.
+ * Copyright (C) 2015  The Async BigTable Authors.  All rights reserved.
+ * This file is part of Async BigTable.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -27,7 +27,7 @@
 package org.hbase.async;
 
 /**
- * Deletes some data into HBase.
+ * Deletes some data into BigTable.
  *
  * <h1>A note on passing {@code byte} arrays in argument</h1>
  * None of the method that receive a {@code byte[]} in argument will copy it.
@@ -37,7 +37,7 @@ package org.hbase.async;
  * <h1>A note on passing {@code timestamp}s in argument</h1>
  * Irrespective of the order in which you send RPCs, a {@code DeleteRequest}
  * that is created with a specific timestamp in argument will only delete
- * values in HBase that were previously stored with a timestamp less than
+ * values in BigTable that were previously stored with a timestamp less than
  * or equal to that of the {@code DeleteRequest} unless
  * {@link #setDeleteAtTimestampOnly} is also called, in which case only the
  * value at the specified timestamp is deleted.
@@ -77,7 +77,6 @@ public final class DeleteRequest extends BatchableRpc
    * @param key The key of the row to edit in that table.
    * @param timestamp The timestamp to set on this edit.
    * @throws IllegalArgumentException if any argument is malformed.
-   * @since 1.2
    */
   public DeleteRequest(final byte[] table, final byte[] key,
                        final long timestamp) {
@@ -91,7 +90,6 @@ public final class DeleteRequest extends BatchableRpc
    * @param key The key of the row to edit in that table.
    * @param family The column family to edit in that table.
    * @throws IllegalArgumentException if any argument is malformed.
-   * @since 1.1
    */
   public DeleteRequest(final byte[] table,
                        final byte[] key,
@@ -107,7 +105,6 @@ public final class DeleteRequest extends BatchableRpc
    * @param family The column family to edit in that table.
    * @param timestamp The timestamp to set on this edit.
    * @throws IllegalArgumentException if any argument is malformed.
-   * @since 1.2
    */
   public DeleteRequest(final byte[] table,
                        final byte[] key,
@@ -145,7 +142,6 @@ public final class DeleteRequest extends BatchableRpc
    * Can be {@code null}, to delete the whole family.
    * @param timestamp The timestamp to set on this edit.
    * @throws IllegalArgumentException if any argument is malformed.
-   * @since 1.2
    */
   public DeleteRequest(final byte[] table,
                        final byte[] key,
@@ -165,7 +161,6 @@ public final class DeleteRequest extends BatchableRpc
    * @param family The column family to edit in that table.
    * @param qualifiers The column qualifiers to delete in that family.
    * @throws IllegalArgumentException if any argument is malformed.
-   * @since 1.1
    */
   public DeleteRequest(final byte[] table,
                        final byte[] key,
@@ -184,7 +179,6 @@ public final class DeleteRequest extends BatchableRpc
    * @param qualifiers The column qualifiers to delete in that family.
    * @param timestamp The timestamp to set on this edit.
    * @throws IllegalArgumentException if any argument is malformed.
-   * @since 1.2
    */
   public DeleteRequest(final byte[] table,
                        final byte[] key,
@@ -201,7 +195,8 @@ public final class DeleteRequest extends BatchableRpc
    * @param key The key of the row to edit in that table.
    * @param family The column family to edit in that table.
    * @param qualifier The column qualifier to delete in that family.
-   * @param lock An explicit row lock to use with this request.
+   * @param lock Ignored
+   * @deprecated
    * @throws IllegalArgumentException if any argument is malformed.
    */
   public DeleteRequest(final byte[] table,
@@ -211,7 +206,7 @@ public final class DeleteRequest extends BatchableRpc
                        final RowLock lock) {
     this(table, key, family,
          qualifier == null ? null : new byte[][] { qualifier },
-         KeyValue.TIMESTAMP_NOW, lock.id());
+         KeyValue.TIMESTAMP_NOW, RowLock.NO_LOCK);
   }
 
   /**
@@ -222,9 +217,9 @@ public final class DeleteRequest extends BatchableRpc
    * @param family The column family to edit in that table.
    * @param qualifier The column qualifier to delete in that family.
    * @param timestamp The timestamp to set on this edit.
-   * @param lock An explicit row lock to use with this request.
+   * @param lock Ignored
+   * @deprecated
    * @throws IllegalArgumentException if any argument is malformed.
-   * @since 1.2
    */
   public DeleteRequest(final byte[] table,
                        final byte[] key,
@@ -234,7 +229,7 @@ public final class DeleteRequest extends BatchableRpc
                        final RowLock lock) {
     this(table, key, family,
          qualifier == null ? null : new byte[][] { qualifier },
-         timestamp, lock.id());
+         timestamp, RowLock.NO_LOCK);
   }
 
   /**
@@ -245,16 +240,16 @@ public final class DeleteRequest extends BatchableRpc
    * @param family The column family to edit in that table.
    * @param qualifiers The column qualifiers to delete in that family.
    * Can be {@code null}.
-   * @param lock An explicit row lock to use with this request.
+   * @param lock Ignored
+   * @deprecated
    * @throws IllegalArgumentException if any argument is malformed.
-   * @since 1.1
    */
   public DeleteRequest(final byte[] table,
                        final byte[] key,
                        final byte[] family,
                        final byte[][] qualifiers,
                        final RowLock lock) {
-    this(table, key, family, qualifiers, KeyValue.TIMESTAMP_NOW, lock.id());
+    this(table, key, family, qualifiers, KeyValue.TIMESTAMP_NOW, RowLock.NO_LOCK);
   }
 
   /**
@@ -266,9 +261,9 @@ public final class DeleteRequest extends BatchableRpc
    * @param qualifiers The column qualifiers to delete in that family.
    * Can be {@code null}.
    * @param timestamp The timestamp to set on this edit.
-   * @param lock An explicit row lock to use with this request.
+   * @param lock Ignored
+   * @deprecated
    * @throws IllegalArgumentException if any argument is malformed.
-   * @since 1.2
    */
   public DeleteRequest(final byte[] table,
                        final byte[] key,
@@ -276,7 +271,7 @@ public final class DeleteRequest extends BatchableRpc
                        final byte[][] qualifiers,
                        final long timestamp,
                        final RowLock lock) {
-    this(table, key, family, qualifiers, timestamp, lock.id());
+    this(table, key, family, qualifiers, timestamp, RowLock.NO_LOCK);
   }
 
   /**
@@ -296,7 +291,6 @@ public final class DeleteRequest extends BatchableRpc
    * @param key The key of the row to edit in that table.
    * @param family The column family to edit in that table.
    * @throws IllegalArgumentException if any argument is malformed.
-   * @since 1.1
    */
   public DeleteRequest(final String table,
                        final String key,
@@ -330,7 +324,8 @@ public final class DeleteRequest extends BatchableRpc
    * @param family The column family to edit in that table.
    * @param qualifier The column qualifier to delete in that family.
    * Can be {@code null} since version 1.1.
-   * @param lock An explicit row lock to use with this request.
+   * @param lock Ignored
+   * @deprecated
    * @throws IllegalArgumentException if any argument is malformed.
    */
   public DeleteRequest(final String table,
@@ -340,7 +335,7 @@ public final class DeleteRequest extends BatchableRpc
                        final RowLock lock) {
     this(table.getBytes(), key.getBytes(), family.getBytes(),
          qualifier == null ? null : new byte[][] { qualifier.getBytes() },
-         KeyValue.TIMESTAMP_NOW, lock.id());
+         KeyValue.TIMESTAMP_NOW, RowLock.NO_LOCK);
   }
 
   /**
@@ -349,7 +344,6 @@ public final class DeleteRequest extends BatchableRpc
    * @param kv The specific {@link KeyValue} to delete.  Note that if this
    * {@link KeyValue} specifies a timestamp, then this specific timestamp only
    * will be deleted.
-   * @since 1.2
    */
   public DeleteRequest(final byte[] table, final KeyValue kv) {
     this(table, kv.key(), kv.family(), new byte[][] { kv.qualifier() },
@@ -362,14 +356,14 @@ public final class DeleteRequest extends BatchableRpc
    * @param kv The specific {@link KeyValue} to delete.  Note that if this
    * {@link KeyValue} specifies a timestamp, then this specific timestamp only
    * will be deleted.
-   * @param lock An explicit row lock to use with this request.
-   * @since 1.2
+   * @param lock Ignored
+   * @deprecated
    */
   public DeleteRequest(final byte[] table,
                        final KeyValue kv,
                        final RowLock lock) {
     this(table, kv.key(), kv.family(), new byte[][] { kv.qualifier() },
-         kv.timestamp(), lock.id());
+         kv.timestamp(), RowLock.NO_LOCK);
   }
 
   /** Private constructor.  */
@@ -412,7 +406,6 @@ public final class DeleteRequest extends BatchableRpc
    * constructor.
    * <p>
    * Only applicable when qualifier(s) is also specified.
-   * @since 1.5
    */
   public void setDeleteAtTimestampOnly(final boolean at_timestamp_only) {
     this.at_timestamp_only = at_timestamp_only;
@@ -420,12 +413,10 @@ public final class DeleteRequest extends BatchableRpc
 
   /**
    * Returns whether to only delete the cell value at the timestamp.
-   * @since 1.5
    */
   public boolean deleteAtTimestampOnly() {
     return at_timestamp_only;
   }
-
 
   @Override
   public byte[] table() {
@@ -445,8 +436,5 @@ public final class DeleteRequest extends BatchableRpc
   public String toString() {
     return super.toStringWithQualifiers("DeleteRequest", family, qualifiers);
   }
-
-
-
 
 }

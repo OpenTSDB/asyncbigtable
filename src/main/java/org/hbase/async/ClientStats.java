@@ -1,6 +1,6 @@
 /*
- * Copyright (C) 2012  The Async HBase Authors.  All rights reserved.
- * This file is part of Async HBase.
+ * Copyright (C) 2015  The Async BigTable Authors.  All rights reserved.
+ * This file is part of Async BigTable.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -36,7 +36,7 @@ import com.google.common.cache.CacheStats;
  * atomically, so although each individual number is up-to-date as of
  * the time this object is created, small inconsistencies between numbers
  * can arise.
- * @since 1.3
+ * TODO - UPDATE comments and stats for big table
  */
 public final class ClientStats {
 
@@ -105,7 +105,7 @@ public final class ClientStats {
    * Returns how many lookups in {@code -ROOT-} were performed.
    * <p>
    * This number should remain low.  It will be 1 after the first access to
-   * HBase, and will increase by 1 each time the {@code .META.} region moves
+   * BigTable, and will increase by 1 each time the {@code .META.} region moves
    * to another server, which should seldom happen.
    * <p>
    * This isn't to be confused with the number of times we looked up where
@@ -151,8 +151,8 @@ public final class ClientStats {
   /**
    * Number of {@code NoSuchRegionException} handled by the client.
    * <p>
-   * The {@code NoSuchRegionException} is an integral part of the way HBase
-   * work.  HBase clients keep a local cache of where they think each region
+   * The {@code NoSuchRegionException} is an integral part of the way BigTable
+   * work.  BigTable clients keep a local cache of where they think each region
    * is in the cluster, but in practice things aren't static, and regions will
    * move due to load balancing, or get split into two new regions due to
    * write activity.  When this happens, clients find out "the hard way" that
@@ -202,9 +202,6 @@ public final class ClientStats {
    * created at the application level, they don't reflect the actual number of
    * RPCs sent to the network because of batching (see
    * {@link HBaseClient#setFlushInterval}).
-   * <p>
-   * Note that {@link #deletes} can only be batched if you use HBase 0.92 or
-   * above.
    */
   public long numBatchedRpcSent() {
     return num_multi_rpcs;

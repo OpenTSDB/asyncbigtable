@@ -1,6 +1,6 @@
 /*
- * Copyright (C) 2010-2012  The Async HBase Authors.  All rights reserved.
- * This file is part of Async HBase.
+ * Copyright (C) 2015  The Async BigTable Authors.  All rights reserved.
+ * This file is part of Async BigTable.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -27,47 +27,34 @@
 package org.hbase.async;
 
 /**
- * Acquires an explicit row lock.
- * <p>
- * <strong>Row locks are no longer supported as of HBase 0.96.</strong>
- * While they can still be used with earlier HBase versions,
- * attempting to use them with HBase 0.95 and up will cause a
- * {@link UnsupportedOperationException} to be thrown.
- * <p>
- * For a description of what row locks are, see {@link RowLock}.
- *
- * <h1>A note on passing {@code byte} arrays in argument</h1>
- * None of the method that receive a {@code byte[]} in argument will copy it.
- * For more info, please refer to the documentation of {@link HBaseRpc}.
- * <h1>A note on passing {@code String}s in argument</h1>
- * All strings are assumed to use the platform's default charset.
+ * A leftover from early AsyncHBase days. This class should not be used and all
+ * methods throw unsupported operation exceptions.
+ * @deprecated
  */
 public final class RowLockRequest extends HBaseRpc
   implements HBaseRpc.HasTable, HBaseRpc.HasKey {
-
-  private static final byte[] LOCK_ROW = new byte[] {
-    'l', 'o', 'c', 'k', 'R', 'o', 'w'
-  };
-
+  
   /**
-   * Constructor.
-   * <strong>These byte arrays will NOT be copied.</strong>
-   * @param table The table containing the row to lock.
-   * @param key The key of the row to lock in that table.
+   * CTor that always throws an UnsupportedOperationException as locking is
+   * no longer supported
+   * @param table Unused
+   * @param key Unused
+   * @throws UnsupportedOperationException all the time
    */
   public RowLockRequest(final byte[] table, final byte[] key) {
-    super(table, key);
+    throw new UnsupportedOperationException("Locking is not supported in BigTable");
   }
 
   /**
-   * Constructor.
-   * @param table The table containing the row to lock.
-   * @param key The key of the row to lock in that table.
+   * CTor that always throws an UnsupportedOperationException as locking is
+   * no longer supported
+   * @param table Unused
+   * @param key Unused
+   * @throws UnsupportedOperationException all the time
    */
   public RowLockRequest(final String table, final String key) {
     this(table.getBytes(), key.getBytes());
   }
-
 
   @Override
   public byte[] table() {

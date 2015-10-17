@@ -1,6 +1,6 @@
 /*
- * Copyright (C) 2010-2012  The Async HBase Authors.  All rights reserved.
- * This file is part of Async HBase.
+ * Copyright (C) 2015  The Async BigTable Authors.  All rights reserved.
+ * This file is part of Async BigTable.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -25,8 +25,6 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 package org.hbase.async;
-
-import io.netty.buffer.ByteBuf;
 
 import java.util.Arrays;
 
@@ -60,19 +58,7 @@ public final class KeyValue implements Comparable<KeyValue> {
   private final byte[] qualifier;
   private final byte[] value;
   private final long timestamp;
-  //private final byte type;  // Not needed for us ATM.
-
-  // Note: type can be one of:
-  //   -  4  0b00000100  Put
-  static final byte PUT = 4;
-  //   -  8  0b00001000  Delete        (delete the specified version of a cell)
-  static final byte DELETE = 8;
-  //   - 12  0b00001100  DeleteColumn  (delete all previous versions of a cell)
-  static final byte DELETE_COLUMN = 12;
-  //   - 14  0b01110010  DeleteFamily  (delete all cells within a family)
-  static final byte DELETE_FAMILY = 14;
-  // (Not sure how those have been assigned...  Randomly maybe?)
-
+  
   /**
    * Constructor.
    * @param key The row key.  Length must fit in 16 bits.
@@ -85,7 +71,6 @@ public final class KeyValue implements Comparable<KeyValue> {
    * @param value The value, the contents of the cell.
    * @throws IllegalArgumentException if any argument is invalid (e.g. array
    * size is too long) or if the timestamp is negative.
-   * @since 1.2
    */
   public KeyValue(final byte[] key,
                   final byte[] family, final byte[] qualifier,
@@ -146,11 +131,7 @@ public final class KeyValue implements Comparable<KeyValue> {
   public long timestamp() {
     return timestamp;
   }
-
-  //public byte type() {
-  //  return type;
-  //}
-
+  
   /** Returns the value, the contents of the cell.  */
   public byte[] value() {
     return value;
@@ -211,118 +192,7 @@ public final class KeyValue implements Comparable<KeyValue> {
     buf.append(')');
     return buf.toString();
   }
-
-  /**
-   * De-serializes {@link KeyValue} from a buffer (HBase 0.94 and before).
-   * @param buf The buffer to de-serialize from.
-   * @param prev Another {@link KeyValue} previously de-serialized from the
-   * same buffer.  Can be {@code null}.  The idea here is that KeyValues
-   * often come in a sorted batch, and often share a number of byte arrays
-   * (e.g.  they all have the same row key and/or same family...).  When
-   * you specify another KeyValue, its byte arrays will be re-used in order
-   * to avoid having too much duplicate data in memory.  This costs a little
-   * bit of CPU time to compare the arrays but saves memory (which in turns
-   * saves CPU time later).
-   * @return a new instance (guaranteed non-{@code null}).
-   * @throws IllegalArgumentException if the buffer seems to contain a
-   * malformed {@link KeyValue}.
-   */
-  public static KeyValue fromBuffer(final ByteBuf buf,
-                                    final KeyValue prev) {
-    final int rowkey_length = buf.readInt();  // Total length of the row key.
-    //LOG.debug("rowkey_length="+rowkey_length);
-   // HBaseRpc.checkNonEmptyArrayLength(buf, rowkey_length);
-    final int value_length = buf.readInt();
-    //LOG.debug("value_length="+value_length);
-   // HBaseRpc.checkArrayLength(buf, value_length);
-    final short key_length = buf.readShort();
-    //LOG.debug("key_length="+key_length);
-   // HBaseRpc.checkArrayLength(buf, value_length);
-    final byte[] key = new byte[key_length];
-    buf.readBytes(key);
-    //LOG.debug("key="+Bytes.pretty(key));
-    final byte family_length = buf.readByte();
-    if (key_length + family_length + 2 + 1 + 8 + 1 > rowkey_length) {
-      invalid("rowkey_length="
-              + key_length + " doesn't match key_length + family_length ("
-              + key_length + " + " + family_length + " +12) in " + buf + '='
-              + Bytes.pretty(buf));
-    }
-    final byte[] family = new byte[family_length];
-    buf.readBytes(family);
-    final int qual_length = (rowkey_length - key_length - family_length
-                             - 2 - 1 - 8 - 1);
-   // HBaseRpc.checkArrayLength(buf, qual_length);
-    final byte[] qualifier;
-    if (qual_length > 0) {
-      qualifier = new byte[qual_length];
-      buf.readBytes(qualifier);
-    } else {
-      qualifier = HBaseClient.EMPTY_ARRAY;
-    }
-    final long timestamp = buf.readLong();
-    final byte key_type = buf.readByte();
-    final byte[] value;
-    if (value_length > 0) {
-      value = new byte[value_length];
-      buf.readBytes(value);
-    } else {
-      value = HBaseClient.EMPTY_ARRAY;
-    }
-    if (2 + key_length + 1 + family_length + qual_length + 8 + 1
-        != rowkey_length) {  // XXX TMP DEBUG
-      invalid("2 + rl:" + key_length + " + 1 + fl:" + family_length + " + ql:"
-              + qual_length + " + 8 + 1" + " != kl:" + rowkey_length);
-    }
-    if (prev == null) {
-      return new KeyValue(key, family, qualifier, timestamp, /*key_type,*/
-                          value);
-    } else {
-      return new KeyValue(Bytes.deDup(prev.key, key),
-                          Bytes.deDup(prev.family, family),
-                          Bytes.deDup(prev.qualifier, qualifier),
-                          timestamp, /*key_type,*/ value);
-    }
-  }
-
-  private static void invalid(final String errmsg) {
-    throw new IllegalArgumentException(errmsg);
-  }
-
-  /**
-   * Transforms a protobuf Cell message into a KeyValue (HBase 0.95+).
-   * @param buf The buffer to de-serialize from.
-   * @param prev Another {@link KeyValue} previously de-serialized from the
-   * same buffer.  Can be {@code null}.  The idea here is that KeyValues
-   * often come in a sorted batch, and often share a number of byte arrays
-   * (e.g.  they all have the same row key and/or same family...).  When
-   * you specify another KeyValue, its byte arrays will be re-used in order
-   * to avoid having too much duplicate data in memory.  This costs a little
-   * bit of CPU time to compare the arrays but saves memory (which in turns
-   * saves CPU time later).
-   * @return a new instance (guaranteed non-{@code null}).
-   */
-//  static KeyValue fromCell(final CellPB.Cell cell, final KeyValue prev) {
-//    final byte[] key = Bytes.get(cell.getRow());
-//    final byte[] family = Bytes.get(cell.getFamily());
-//    final byte[] qualifier = Bytes.get(cell.getQualifier());
-//    final long timestamp = cell.getTimestamp();
-//    final byte[] value = Bytes.get(cell.getValue());
-//    if (prev == null) {
-//      return new KeyValue(key, family, qualifier, timestamp, /*key_type,*/
-//                          value);
-//    } else {
-//      return new KeyValue(Bytes.deDup(prev.key, key),
-//                          Bytes.deDup(prev.family, family),
-//                          Bytes.deDup(prev.qualifier, qualifier),
-//                          timestamp, /*key_type,*/ value);
-//    }
-//  }
-
-  // ------------------------------------------------------------ //
-  // Misc helper functions to validate some aspects of KeyValues. //
-  // ------------------------------------------------------------ //
-
+  
   // OK this isn't technically part of a KeyValue but since all the similar
   // functions are here, let's keep things together in one place.
   /**
@@ -391,81 +261,5 @@ public final class KeyValue implements Comparable<KeyValue> {
   static void checkValue(final byte[] value) {
     HBaseRpc.checkArrayLength(value);
   }
-
-  // ---------------------- //
-  // Serialization helpers. //
-  // ---------------------- //
-
-  /**
-   * Serializes this KeyValue.
-   * @param buf The buffer into which to write the serialized form.
-   * @param type What kind of KV (e.g. {@link #PUT} or {@link DELETE_FAMILY}).
-   */
-  void serialize(final ByteBuf buf, final byte type) {
-    serialize(buf, type, timestamp, key, family, qualifier, value);
-  }
-
-  /**
-   * Returns the serialized length of a KeyValue.
-   */
-  int predictSerializedSize() {
-    return predictSerializedSize(key, family, qualifier, value);
-  }
-
-  /**
-   * Returns the serialized length of a KeyValue.
-   */
-  static int predictSerializedSize(final byte[] key,
-                                   final byte[] family,
-                                   final byte[] qualifier,
-                                   final byte[] value) {
-    return
-      + 4  // int: Total length of the whole KeyValue.
-      + 4  // int: Total length of the key part of the KeyValue.
-      + 4  // int: Total length of the value part of the KeyValue.
-      + 2                 // short: Row key length.
-      + key.length        // The row key.
-      + 1                 // byte: Family length.
-      + family.length     // The family.
-      + qualifier.length  // The qualifier.
-      + 8                 // long: The timestamp.
-      + 1                 // byte: The type of KeyValue.
-      + (value == null ? 0 : value.length);
-  }
-
-  /**
-   * Serializes a KeyValue.
-   * @param buf The buffer into which to write the serialized form.
-   * @param type What kind of KV (e.g. {@link #PUT} or {@link DELETE_FAMILY}).
-   * @param timestamp The timestamp to put on the KV.
-   */
-  static void serialize(final ByteBuf buf,
-                        final byte type,
-                        final long timestamp,
-                        final byte[] key,
-                        final byte[] family,
-                        final byte[] qualifier,
-                        final byte[] value) {
-    final int val_length = value == null ? 0 : value.length;
-    final int key_length = 2 + key.length + 1 + family.length
-      + qualifier.length + 8 + 1;
-
-    // Write the length of the whole KeyValue again (this is so useless...).
-    buf.writeInt(4 + 4 + key_length + val_length);   // Total length.
-    buf.writeInt(key_length);                        // Key length.
-    buf.writeInt(val_length);                        // Value length.
-
-    // Then the whole key.
-    buf.writeShort(key.length);           // Row length.
-    buf.writeBytes(key);                  // The row key (again!).
-    buf.writeByte((byte) family.length);  // Family length.
-    buf.writeBytes(family);               // Write the family (again!).
-    buf.writeBytes(qualifier);            // The qualifier.
-    buf.writeLong(timestamp);             // The timestamp (again!).
-    buf.writeByte(type);                  // Type of edit
-    if (value != null) {
-      buf.writeBytes(value);              // Finally, the value (if any).
-    }
-  }
-
+  
 }

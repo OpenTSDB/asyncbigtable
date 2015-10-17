@@ -1,6 +1,6 @@
 /*
- * Copyright (C) 2013  The Async HBase Authors.  All rights reserved.
- * This file is part of Async HBase.
+ * Copyright (C) 2015  The Async BigTable Authors.  All rights reserved.
+ * This file is part of Async BigTable.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -42,7 +42,6 @@ import org.jboss.netty.buffer.ChannelBuffer;
  * Subclasses are guaranteed to be immutable and are thus
  * thread-safe as well as usable concurrently on multiple
  * {@link org.hbase.async.Scanner} instances.
- * @since 1.5
  */
 public abstract class ScanFilter {
 

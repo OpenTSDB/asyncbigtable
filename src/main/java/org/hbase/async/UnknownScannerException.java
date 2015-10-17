@@ -1,6 +1,6 @@
 /*
- * Copyright (C) 2010-2012  The Async HBase Authors.  All rights reserved.
- * This file is part of Async HBase.
+ * Copyright (C) 2015  The Async BigTable Authors.  All rights reserved.
+ * This file is part of Async BigTable.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -33,9 +33,7 @@ public final class UnknownScannerException extends RecoverableException {
 
   static final String REMOTE_CLASS =
     "org.apache.hadoop.hbase.UnknownScannerException";
-
-
-
+  
   /**
    * Constructor.
    * @param msg The message of the exception, potentially with a stack trace.
