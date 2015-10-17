@@ -1,6 +1,6 @@
 /*
- * Copyright (C) 2010-2012  The Async HBase Authors.  All rights reserved.
- * This file is part of Async HBase.
+ * Copyright (C) 2015  The Async BigTable Authors.  All rights reserved.
+ * This file is part of Async BigTable.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -27,7 +27,7 @@
 package org.hbase.async;
 
 /**
- * Puts some data into HBase.
+ * Puts some data into BigTable.
  *
  * <h1>A note on passing {@code byte} arrays in argument</h1>
  * None of the method that receive a {@code byte[]} in argument will copy it.
@@ -35,17 +35,17 @@ package org.hbase.async;
  * <h1>A note on passing {@code String}s in argument</h1>
  * All strings are assumed to use the platform's default charset.
  * <h1>A note on passing {@code timestamp}s in argument</h1>
- * HBase orders all the writes based on timestamps from {@code PutRequest}
+ * BigTable orders all the writes based on timestamps from {@code PutRequest}
  * irrespective of the actual order in which they're received or stored by
  * a RegionServer.  In other words, if you send a first {@code PutRequest}
  * with timestamp T, and then later send another one for the same table,
  * key, family and qualifier, but with timestamp T - 1, then the second
  * write will look like it was applied before the first one when you read
- * this cell back from HBase.  When manually setting timestamps, it is thus
+ * this cell back from BigTable.  When manually setting timestamps, it is thus
  * strongly recommended to use real UNIX timestamps in milliseconds, e.g.
  * from {@link System#currentTimeMillis}.
  * <p>
- * If you want to let HBase set the timestamp on a write at the time it's
+ * If you want to let BigTable set the timestamp on a write at the time it's
  * applied within the RegionServer, then use {@link KeyValue#TIMESTAMP_NOW}
  * as a timestamp.  The timestamp is set right before being written to the WAL
  * (Write Ahead Log).  Note however that this has a subtle consequence: if a
@@ -59,13 +59,7 @@ public final class PutRequest extends BatchableRpc
   implements HBaseRpc.HasTable, HBaseRpc.HasKey, HBaseRpc.HasFamily,
              HBaseRpc.HasQualifiers, HBaseRpc.HasValues, HBaseRpc.IsEdit,
              /* legacy: */ HBaseRpc.HasQualifier, HBaseRpc.HasValue {
-
-  /** RPC Method name for HBase 0.94 and earlier.  */
-  private static final byte[] PUT = { 'p', 'u', 't' };
-
-  /** Code type used for serialized `Put' objects.  */
-  static final byte CODE = 35;
-
+  
   /**
    * A put with all fields set to a 1-byte array containing a zero.
    * This is useful for loops that need to start with a valid-looking edit.
@@ -126,7 +120,6 @@ public final class PutRequest extends BatchableRpc
    * @param values The corresponding values to store.
    * @throws IllegalArgumentException if {@code qualifiers.length == 0}
    * or if {@code qualifiers.length != values.length}
-   * @since 1.3
    */
   public PutRequest(final byte[] table,
                     final byte[] key,
@@ -146,7 +139,6 @@ public final class PutRequest extends BatchableRpc
    * @param qualifier The column qualifier to edit in that family.
    * @param value The value to store.
    * @param timestamp The timestamp to set on this edit.
-   * @since 1.2
    */
   public PutRequest(final byte[] table,
                     final byte[] key,
@@ -168,7 +160,6 @@ public final class PutRequest extends BatchableRpc
    * @param timestamp The timestamp to set on this edit.
    * @throws IllegalArgumentException if {@code qualifiers.length == 0}
    * or if {@code qualifiers.length != values.length}
-   * @since 1.3
    */
   public PutRequest(final byte[] table,
                     final byte[] key,
@@ -193,7 +184,8 @@ public final class PutRequest extends BatchableRpc
    * @param family The column family to edit in that table.
    * @param qualifier The column qualifier to edit in that family.
    * @param value The value to store.
-   * @param lock An explicit row lock to use with this request.
+   * @param lock Ignored
+   * @deprecated
    */
   public PutRequest(final byte[] table,
                     final byte[] key,
@@ -202,7 +194,7 @@ public final class PutRequest extends BatchableRpc
                     final byte[] value,
                     final RowLock lock) {
     this(table, key, family, qualifier, value,
-         KeyValue.TIMESTAMP_NOW, lock.id());
+         KeyValue.TIMESTAMP_NOW, RowLock.NO_LOCK);
   }
 
   /**
@@ -214,8 +206,8 @@ public final class PutRequest extends BatchableRpc
    * @param qualifier The column qualifier to edit in that family.
    * @param value The value to store.
    * @param timestamp The timestamp to set on this edit.
-   * @param lock An explicit row lock to use with this request.
-   * @since 1.2
+   * @param lock Ignored
+   * @deprecated
    */
   public PutRequest(final byte[] table,
                     final byte[] key,
@@ -224,7 +216,7 @@ public final class PutRequest extends BatchableRpc
                     final byte[] value,
                     final long timestamp,
                     final RowLock lock) {
-    this(table, key, family, qualifier, value, timestamp, lock.id());
+    this(table, key, family, qualifier, value, timestamp, RowLock.NO_LOCK);
   }
 
   /**
@@ -236,10 +228,10 @@ public final class PutRequest extends BatchableRpc
    * @param qualifiers The column qualifiers to edit in that family.
    * @param values The corresponding values to store.
    * @param timestamp The timestamp to set on this edit.
-   * @param lock An explicit row lock to use with this request.
+   * @param lock Ignored
+   * @deprecated
    * @throws IllegalArgumentException if {@code qualifiers.length == 0}
    * or if {@code qualifiers.length != values.length}
-   * @since 1.3
    */
   public PutRequest(final byte[] table,
                     final byte[] key,
@@ -248,7 +240,7 @@ public final class PutRequest extends BatchableRpc
                     final byte[][] values,
                     final long timestamp,
                     final RowLock lock) {
-    this(table, key, family, qualifiers, values, timestamp, lock.id());
+    this(table, key, family, qualifiers, values, timestamp, RowLock.NO_LOCK);
   }
 
   /**
@@ -288,7 +280,8 @@ public final class PutRequest extends BatchableRpc
    * @param family The column family to edit in that table.
    * @param qualifier The column qualifier to edit in that family.
    * @param value The value to store.
-   * @param lock An explicit row lock to use with this request.
+   * @param lock Ignored
+   * @deprecated
    */
   public PutRequest(final String table,
                     final String key,
@@ -298,14 +291,13 @@ public final class PutRequest extends BatchableRpc
                     final RowLock lock) {
     this(table.getBytes(), key.getBytes(), family.getBytes(),
          qualifier.getBytes(), value.getBytes(),
-         KeyValue.TIMESTAMP_NOW, lock.id());
+         KeyValue.TIMESTAMP_NOW, RowLock.NO_LOCK);
   }
 
   /**
    * Constructor from a {@link KeyValue}.
    * @param table The table to edit.
    * @param kv The {@link KeyValue} to store.
-   * @since 1.1
    */
   public PutRequest(final byte[] table,
                     final KeyValue kv) {
@@ -316,13 +308,13 @@ public final class PutRequest extends BatchableRpc
    * Constructor from a {@link KeyValue} with an explicit row lock.
    * @param table The table to edit.
    * @param kv The {@link KeyValue} to store.
-   * @param lock An explicit row lock to use with this request.
-   * @since 1.1
+   * @param lock Ignored
+   * @deprecated
    */
   public PutRequest(final byte[] table,
                     final KeyValue kv,
                     final RowLock lock) {
-    this(table, kv, lock.id());
+    this(table, kv, RowLock.NO_LOCK);
   }
 
   /** Private constructor.  */
@@ -392,7 +384,6 @@ public final class PutRequest extends BatchableRpc
 
   /**
    * {@inheritDoc}
-   * @since 1.3
    */
   @Override
   public byte[][] qualifiers() {
@@ -410,7 +401,6 @@ public final class PutRequest extends BatchableRpc
 
   /**
    * {@inheritDoc}
-   * @since 1.3
    */
   @Override
   public byte[][] values() {

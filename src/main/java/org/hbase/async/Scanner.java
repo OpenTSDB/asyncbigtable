@@ -1,6 +1,6 @@
 /*
- * Copyright (C) 2010-2012  The Async HBase Authors.  All rights reserved.
- * This file is part of Async HBase.
+ * Copyright (C) 2015  The Async BigTable Authors.  All rights reserved.
+ * This file is part of Async BigTable.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -25,7 +25,6 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 package org.hbase.async;
-
 
 import com.stumbleupon.async.Callback;
 import com.stumbleupon.async.Deferred;

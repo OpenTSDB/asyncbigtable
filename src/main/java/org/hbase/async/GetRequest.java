@@ -1,6 +1,6 @@
 /*
- * Copyright (C) 2010-2012  The Async HBase Authors.  All rights reserved.
- * This file is part of Async HBase.
+ * Copyright (C) 2015  The Async BigTable Authors.  All rights reserved.
+ * This file is part of Async BigTable.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -27,7 +27,7 @@
 package org.hbase.async;
 
 /**
- * Reads something from HBase.
+ * Reads something from BigTable.
  *
  * <h1>A note on passing {@code byte} arrays in argument</h1>
  * None of the method that receive a {@code byte[]} in argument will copy it.
@@ -39,14 +39,8 @@ public final class GetRequest extends HBaseRpc
   implements HBaseRpc.HasTable, HBaseRpc.HasKey,
              HBaseRpc.HasFamily, HBaseRpc.HasQualifiers {
 
-  private static final byte[] GET = new byte[] { 'g', 'e', 't' };
-  static final byte[] GGET = new byte[] { 'G', 'e', 't' };  // HBase 0.95+
-  private static final byte[] EXISTS =
-    new byte[] { 'e', 'x', 'i', 's', 't', 's' };
-
   private byte[] family;     // TODO(tsuna): Handle multiple families?
   private byte[][] qualifiers;
-  private long lockid = RowLock.NO_LOCK;
 
   /**
    * How many versions of each cell to retrieve.
@@ -95,7 +89,6 @@ public final class GetRequest extends HBaseRpc
    * @param table The non-empty name of the table to use.
    * @param key The row key to get in that table.
    * @param family The column family.
-   * @since 1.5
    */
   public GetRequest(final byte[] table,
                     final byte[] key,
@@ -109,7 +102,6 @@ public final class GetRequest extends HBaseRpc
    * @param table The non-empty name of the table to use.
    * @param key The row key to get in that table.
    * @param family The column family.
-   * @since 1.5
    */
   public GetRequest(final String table,
                     final String key,
@@ -125,7 +117,6 @@ public final class GetRequest extends HBaseRpc
    * @param key The row key to get in that table.
    * @param family The column family.
    * @param qualifier The column qualifier.
-   * @since 1.5
    */
   public GetRequest(final byte[] table,
                     final byte[] key,
@@ -142,7 +133,6 @@ public final class GetRequest extends HBaseRpc
    * @param key The row key to get in that table.
    * @param family The column family.
    * @param qualifier The column qualifier.
-   * @since 1.5
    */
   public GetRequest(final String table,
                     final String key,
@@ -234,7 +224,6 @@ public final class GetRequest extends HBaseRpc
    * @param qualifiers The column qualifiers.
    * <strong>This byte array will NOT be copied.</strong>
    * @return {@code this}, always.
-   * @since 1.1
    */
   public GetRequest qualifiers(final byte[][] qualifiers) {
     if (qualifiers == null) {
@@ -254,8 +243,8 @@ public final class GetRequest extends HBaseRpc
 
   /** Specifies an explicit row lock to use with this request.  */
   public GetRequest withRowLock(final RowLock lock) {
-    lockid = lock.id();
-    return this;
+    throw new UnsupportedOperationException(
+        "Locking is not supported in the BigTable client");
   }
 
   /**
@@ -266,7 +255,6 @@ public final class GetRequest extends HBaseRpc
    * {@link Integer#MAX_VALUE} in argument.
    * @param versions A strictly positive number of versions to return.
    * @return {@code this}, always.
-   * @since 1.4
    * @throws IllegalArgumentException if {@code versions <= 0}
    */
   public GetRequest maxVersions(final int versions) {
@@ -281,7 +269,6 @@ public final class GetRequest extends HBaseRpc
   /**
    * Returns the maximum number of versions to return for each cell scanned.
    * @return A strictly positive integer.
-   * @since 1.4
    */
   public int maxVersions() {
     return versions >>> 1;
