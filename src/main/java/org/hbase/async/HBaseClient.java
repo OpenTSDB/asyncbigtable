@@ -57,6 +57,10 @@ import io.netty.util.TimerTask;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map.Entry;
 import java.util.NavigableMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -226,6 +230,16 @@ public final class HBaseClient {
   }
   
   /**
+   * Ctor that reads settings from the hbase-site.xml in HBASE_HOME and/or from
+   * a different properties configuration file. Note that values in the config
+   * file will override those in the hbase-site.xml or other hadoop config files).
+   * @param config The config to pull settings from.
+   */
+  public HBaseClient(final Config config) {
+    this(config, Executors.newCachedThreadPool());
+  }
+  
+  /**
    * Ctor that reads settings from the hbase-site.xml in HBASE_HOME
    * @param executor The executor from which to obtain threads for NIO
    * operations.  It is <strong>strongly</strong> encouraged to use a
@@ -237,8 +251,29 @@ public final class HBaseClient {
    * the executor.
    */
   public HBaseClient(final ExecutorService executor) {
+    this(new Config(), executor);
+  }
+
+  /**
+   * Ctor that reads settings from the hbase-site.xml in HBASE_HOME and/or from
+   * a different properties configuration file. Note that values in the config
+   * file will override those in the hbase-site.xml or other hadoop config files).
+   * @param config The config to pull settings from.
+   * @param executor The executor from which to obtain threads for NIO
+   * operations.  It is <strong>strongly</strong> encouraged to use a
+   * {@link Executors#newCachedThreadPool} or something equivalent unless
+   * you're sure to understand how Netty creates and uses threads.
+   * Using a fixed-size thread pool will not work the way you expect.
+   * <p>
+   * Note that calling {@link #shutdown} on this client <b>will</b> shut down 
+   * the executor.
+   */
+  public HBaseClient(final Config config, final ExecutorService executor) {
     this.executor = executor;
     hbase_config = HBaseConfiguration.create();
+    for (final Entry<String, String> entry : config.getMap().entrySet()) {
+      hbase_config.set(entry.getKey(), entry.getValue());
+    }
     LOG.info("BigTable API: Connecting with config: {}", hbase_config);
     try {
       hbase_connection = ConnectionFactory.createConnection(hbase_config);
@@ -247,7 +282,7 @@ public final class HBaseClient {
           "Failed to create conection with config: " + hbase_config, e);
     }
   }
-
+  
   /**
    * Returns a snapshot of usage statistics for this client.
    */
@@ -274,7 +309,16 @@ public final class HBaseClient {
       cache != null ? cache.stats() : BufferedIncrement.ZERO_STATS
     );
   }
-
+  
+  /**
+   * UNUSED at this time. Eventually we may store BigTable stats in these
+   * objects. It is here for backwards compatability with AsyncHBase.
+   * @return An empty list.
+   */
+  public List<RegionClientStats> regionStats() {
+    return Collections.emptyList();
+  }
+  
   /**
    * Flushes to BigTable any buffered client-side write operation.
    * <p>
@@ -397,6 +441,22 @@ public final class HBaseClient {
   }
 
   /**
+   * Returns a configuration object that contains all of the properties from the
+   * Hadoop configs on the class path as well as the potential config passed
+   * in the ctor.
+   * @return A configuration object
+   */
+  public Config getConfig() {
+    final Config config = new Config();
+    final Iterator<Entry<String, String>> iterator = hbase_config.iterator();
+    while (iterator.hasNext()) {
+      final Entry<String, String> entry = iterator.next();
+      config.overrideConfig(entry.getKey(), entry.getValue());
+    }
+    return config;
+  }
+  
+  /**
    * Schedules a new timeout.
    * @param task The task to execute when the timer times out.
    * @param timeout_ms The timeout, in milliseconds (strictly positive).
@@ -427,6 +487,11 @@ public final class HBaseClient {
     return flush_interval;
   }
 
+  /** @returns the default RPC timeout period in milliseconds */
+  public int getDefaultRpcTimeout() {
+    return hbase_config.getInt("hbase.rpc.timeout", 60000);
+  }
+  
   /**
    * Returns the capacity of the increment buffer.
    * <p>
@@ -1172,6 +1237,74 @@ public final class HBaseClient {
     }
   }
 
+  /**
+   * A no-op for BigTable clients
+   * @param table Ignored
+   * @return A deferred with a null result immediately.
+   * @deprecated
+   */
+  public Deferred<Object> prefetchMeta(final String table) {
+    return Deferred.fromResult(null);
+  }
+  
+  /**
+   * A no-op for BigTable clients
+   * @param table Ignored
+   * @param start Ignored
+   * @param stop Ignored
+   * @return A deferred with a null result immediately.
+   * @deprecated
+   */
+  public Deferred<Object> prefetchMeta(final String table,
+      final String start,
+      final String stop) {
+    return Deferred.fromResult(null);
+  }
+  
+  /**
+   * A no-op for BigTable clients
+   * @param table Ignored
+   * @return A deferred with a null result immediately.
+   * @deprecated
+   */
+  public Deferred<Object> prefetchMeta(final byte[] table) {
+    return Deferred.fromResult(null);
+  }
+  
+  /**
+   * A no-op for BigTable clients
+   * @param table Ignored
+   * @param start Ignored
+   * @param stop Ignored
+   * @return A deferred with a null result immediately.
+   * @deprecated
+   */
+  public Deferred<Object> prefetchMeta(final byte[] table,
+      final byte[] start,
+      final byte[] stop) {
+    return Deferred.fromResult(null);
+  }
+  
+  /**
+   * A no-op for BigTable clients
+   * @deprecated
+   * @param table Ignored
+   * @return An empty list
+   */
+  public Deferred<List<RegionLocation>> locateRegions(final String table) {
+    return locateRegions(table.getBytes());
+  }
+  
+  /**
+   * A no-op for BigTable clients
+   * @deprecated
+   * @param table Ignored
+   * @return An empty list
+   */
+  public Deferred<List<RegionLocation>> locateRegions(final byte[] table) {
+    return Deferred.fromResult(Collections.<RegionLocation>emptyList());
+  }
+  
   // --------------- //
   // Little helpers. //
   // --------------- //
