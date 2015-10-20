@@ -278,5 +278,14 @@ public final class ClientStats {
   public CacheStats incrementBufferStats() {
     return increment_buffer_stats;
   }
-
+  
+  /** @return 0. May be used in the future. Here for compatability. */
+  public int regionClients() {
+    return 0;
+  }
+  
+  /** @return 0. May be used in the future. Here for compatability. */
+  public long idleConnectionsClosed() {
+    return 0;
+  }
 }
