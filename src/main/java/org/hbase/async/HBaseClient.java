@@ -781,7 +781,7 @@ public final class HBaseClient {
     try {
       table = hbase_connection.getTable(TableName.valueOf(scanner.table()));
       ResultScanner result = table.getScanner(scanner.getHbaseScan());
-      scanner.setHbaseResultScanner(result);
+      scanner.setResultScanner(result);
       scanner.setHbaseTable(table);
 
       return Deferred.fromResult(new Object());
@@ -807,8 +807,8 @@ public final class HBaseClient {
       LOG.debug("BigTable API: Closing scanner {}", scanner);
     }
     try {
-      if (scanner.getHbaseResultScanner() != null) {
-        scanner.getHbaseResultScanner().close();
+      if (scanner.getResultScanner() != null) {
+        scanner.getResultScanner().close();
       } else {
         LOG.warn("Cannot close " + scanner + " properly, no result scanner open");
       }
@@ -816,7 +816,7 @@ public final class HBaseClient {
     } catch (Exception e) {
       return Deferred.fromError(e);
     } finally {
-      scanner.setHbaseResultScanner(null);
+      scanner.setResultScanner(null);
       try {
         if (scanner.getHbaseTable() != null) {
           scanner.getHbaseTable().close();
