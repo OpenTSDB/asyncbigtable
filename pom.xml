@@ -224,12 +224,6 @@
       <groupId>com.google.cloud.bigtable</groupId>
       <artifactId>bigtable-hbase-1.0</artifactId>
       <version>0.1.9</version>
-        <exclusions>
-            <exclusion>
-                <groupId>com.fasterxml.jackson.core</groupId>
-                <artifactId>jackson-core</artifactId>
-            </exclusion>
-        </exclusions>
     </dependency>
 
     <dependency>
