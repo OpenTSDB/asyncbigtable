@@ -56,6 +56,7 @@ import io.netty.util.Timer;
 import io.netty.util.TimerTask;
 
 import java.io.IOException;
+import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
@@ -75,7 +76,10 @@ import static java.util.concurrent.TimeUnit.MILLISECONDS;
  */
 public final class HBaseClient {
   private static final Logger LOG = LoggerFactory.getLogger(HBaseClient.class);
-
+  
+  /** Used for some byte encoding operations */
+  public static final Charset ASCII = Charset.forName("ISO_8859_1");
+  
   /**
    * An empty byte array you can use.  This can be useful for instance with
    * {@link Scanner#setStartKey} and {@link Scanner#setStopKey}.
