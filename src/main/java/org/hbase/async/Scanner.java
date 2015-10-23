@@ -28,10 +28,12 @@ package org.hbase.async;
 
 import com.stumbleupon.async.Callback;
 import com.stumbleupon.async.Deferred;
+
 import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.client.ResultScanner;
 import org.apache.hadoop.hbase.client.Scan;
 import org.apache.hadoop.hbase.client.Table;
+import org.apache.hadoop.hbase.filter.ByteArrayComparable;
 import org.apache.hadoop.hbase.filter.CompareFilter;
 import org.apache.hadoop.hbase.filter.RegexStringComparator;
 import org.apache.hadoop.hbase.filter.RowFilter;
@@ -39,6 +41,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.NavigableMap;
@@ -398,8 +401,7 @@ public final class Scanner {
    * @param regexp The regular expression with which to filter the row keys.
    */
   public void setKeyRegexp(final String regexp) {
-    RegexStringComparator comparator = new RegexStringComparator(regexp);
-    hbase_scan.setFilter(new RowFilter(CompareFilter.CompareOp.EQUAL, comparator));
+    setKeyRegexp(regexp, HBaseClient.ASCII);
   }
 
   /**
@@ -417,7 +419,27 @@ public final class Scanner {
   public void setKeyRegexp(final String regexp, final Charset charset) {
     RegexStringComparator comparator = new RegexStringComparator(regexp);
     comparator.setCharset(charset);
-    hbase_scan.setFilter(new RowFilter(CompareFilter.CompareOp.EQUAL, comparator));
+    try {
+      // WARNING: This is some ugly ass code. It WILL break at some point. 
+      // BigTable uses RE2 and runs in raw byte mode. TSDB writes regex with 
+      // byte values but when passing it through the HTable APIs it's converted
+      // to UTF and serializes differently than the old AsyncHBase client. The
+      // native BigTable client will pass the regex along properly BUT we need
+      // to bypass the RegexStringComparator methods and inject our ASCII regex
+      // directly into the underlying comparator object. Hopefully this is 
+      // temporary (famous last words) until we get to a native BigTable wrapper.
+      final Field field = ByteArrayComparable.class.getDeclaredField("value");
+      field.setAccessible(true);
+      field.set(comparator, regexp.getBytes(HBaseClient.ASCII));
+      field.setAccessible(false);
+      hbase_scan.setFilter(new RowFilter(CompareFilter.CompareOp.EQUAL, comparator));
+    } catch (NoSuchFieldException e) {
+      throw new RuntimeException("ByteArrayComparator must have changed, "
+          + "can't find the field", e);
+    } catch (IllegalAccessException e) {
+       throw new RuntimeException("Access denied when hacking the "
+          + "regex comparator field", e);
+    }
   }
 
   /**
