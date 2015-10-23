@@ -21,6 +21,7 @@
                 <exclude>org.slf4j:log4j-over-slf4j</exclude>
                 <exclude>io.netty:netty</exclude>
                 <exclude>org.mortbay.jetty.alpn:alpn-boot:jar</exclude>
+                <exclude>com.fasterxml.jackson.core:jackson-core:jar</exclude>
             </excludes>
         </dependencySet>
     </dependencySets>
