@@ -11,10 +11,14 @@ to replace AsyncHBase when running with an HBase backend or be a general
 purpose HBase library.
 
 
-## Build instructions
+## Basic Installation
 
+Contrary to the original asynchbase library, asyncbigtable has adopted Maven
+as the building tool for this project.
 
-Maven has been adopted as the building tool for this project. To produce jar file, run 
+To produce jar file simply run:
 
     mvn clean package
+
+
 
