@@ -181,7 +181,6 @@ public final class Scanner {
    */
   private int versions = 1;
 
-
   /**
    * This is the scanner ID we got from the RegionServer.
    * It's generated randomly so any {@code long} value is possible.
@@ -417,29 +416,7 @@ public final class Scanner {
    * scanner.
    */
   public void setKeyRegexp(final String regexp, final Charset charset) {
-    RegexStringComparator comparator = new RegexStringComparator(regexp);
-    comparator.setCharset(charset);
-    try {
-      // WARNING: This is some ugly ass code. It WILL break at some point. 
-      // BigTable uses RE2 and runs in raw byte mode. TSDB writes regex with 
-      // byte values but when passing it through the HTable APIs it's converted
-      // to UTF and serializes differently than the old AsyncHBase client. The
-      // native BigTable client will pass the regex along properly BUT we need
-      // to bypass the RegexStringComparator methods and inject our ASCII regex
-      // directly into the underlying comparator object. Hopefully this is 
-      // temporary (famous last words) until we get to a native BigTable wrapper.
-      final Field field = ByteArrayComparable.class.getDeclaredField("value");
-      field.setAccessible(true);
-      field.set(comparator, regexp.getBytes(HBaseClient.ASCII));
-      field.setAccessible(false);
-      hbase_scan.setFilter(new RowFilter(CompareFilter.CompareOp.EQUAL, comparator));
-    } catch (NoSuchFieldException e) {
-      throw new RuntimeException("ByteArrayComparator must have changed, "
-          + "can't find the field", e);
-    } catch (IllegalAccessException e) {
-       throw new RuntimeException("Access denied when hacking the "
-          + "regex comparator field", e);
-    }
+    filter = new KeyRegexpFilter(regexp, charset);
   }
 
   /**
@@ -706,6 +683,25 @@ public final class Scanner {
   
   /** @return the HTable scan object */
   Scan getHbaseScan() {
+    // setup the filters
+    if (filter == null) {
+      return hbase_scan;
+    }
+    
+    // TODO - right now we ONLY push the regex filter to Bigtable. The fuzzy
+    // filter isn't setup properly yet and we're not using column filters at this
+    // time.
+    if (filter instanceof FilterList) {
+      for (final ScanFilter sf : ((FilterList)filter).getFilters()) {
+        if (sf instanceof KeyRegexpFilter) {
+          hbase_scan.setFilter(((KeyRegexpFilter)sf).getRegexFilterForBigtable());
+          return hbase_scan;
+        }
+      }
+    } else if (filter instanceof KeyRegexpFilter) {
+      hbase_scan.setFilter(((KeyRegexpFilter)filter).getRegexFilterForBigtable());
+      return hbase_scan;
+    }
     return hbase_scan;
   }
 
