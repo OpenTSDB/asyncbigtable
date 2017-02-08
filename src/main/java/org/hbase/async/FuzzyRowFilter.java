@@ -26,7 +26,7 @@
  */
 package org.hbase.async;
 
-import org.jboss.netty.buffer.ChannelBuffer;
+import io.netty.buffer.ByteBuf;
 
 import java.lang.IllegalArgumentException;
 import java.util.Collection;
@@ -142,7 +142,7 @@ public final class FuzzyRowFilter extends ScanFilter {
   }
 
   @Override
-  void serializeOld(ChannelBuffer buf) {
+  void serializeOld(ByteBuf buf) {
     
   }
 

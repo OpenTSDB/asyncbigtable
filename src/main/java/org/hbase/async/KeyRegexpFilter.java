@@ -31,8 +31,8 @@ import org.apache.hadoop.hbase.filter.CompareFilter;
 import org.apache.hadoop.hbase.filter.Filter;
 import org.apache.hadoop.hbase.filter.RegexStringComparator;
 import org.apache.hadoop.hbase.filter.RowFilter;
-import org.jboss.netty.buffer.ChannelBuffer;
-import org.jboss.netty.util.CharsetUtil;
+import io.netty.buffer.ByteBuf;
+import io.netty.util.CharsetUtil;
 
 import java.lang.reflect.Field;
 import java.nio.charset.Charset;
@@ -160,7 +160,7 @@ public final class KeyRegexpFilter extends ScanFilter {
   }
 
   @Override
-  void serializeOld(final ChannelBuffer buf) {
+  void serializeOld(final ByteBuf buf) {
     buf.writeByte((byte) ROWFILTER.length);                     // 1
     buf.writeBytes(ROWFILTER);                                  // 40
     // writeUTF of the comparison operator
