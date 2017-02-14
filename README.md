@@ -1,5 +1,9 @@
 # AsyncBigtable 
 
+[![Travis CI status][travis-shield]][travis-link]
+[![Maven][maven-shield]][maven-link]
+[![Stack Overflow][stackoverflow-shield]][stackoverflow-link]
+
 This is an HBase library intended to work as a drop in replacement for the
 fantastic AsyncHBase library and integrate OpenTSDB with Google Bigtable.
 It is using the Apache HBase 1.0 API linking the Google Bigtable
@@ -48,3 +52,12 @@ started out as a fork of the asynchbase 1.5.0 library.
 Please note that the library is still under development and it was never meant
 to replace AsyncHBase when running with an HBase backend or be a general
 purpose HBase library.
+
+<!-- references -->
+
+[travis-shield]: https://travis-ci.org/OpenTSDB/asyncbigtable.svg
+[travis-link]: https://travis-ci.org/OpenTSDB/asyncbigtable
+[maven-shield]: https://img.shields.io/maven-central/v/com.pythian.opentsdb/asyncbigtable.svg
+[maven-link]: https://search.maven.org/#search%7Cga%7C1%7Ccom.pythian.opentsdb
+[stackoverflow-shield]: https://img.shields.io/badge/stackoverflow-opentsdb-green.svg
+[stackoverflow-link]: https://stackoverflow.com/questions/tagged/opentsdb
