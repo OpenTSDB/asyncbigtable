@@ -22,7 +22,7 @@ env:
   global:
     # Add more RAM; Maven is running out during the build:
     # https://travis-ci.org/OpenTSDB/asyncbigtable/jobs/203079393
-    - MAVEN_OPTS="-Xmx4096m -XX:MaxPermSize=4096m"
+    - MAVEN_OPTS="-Xms2048m -Xmx4096m -XX:MaxPermSize=4096m -XX:-UseGCOverheadLimit -XX:+UseG1GC"
 
 install:
   - echo $JAVA_HOME
@@ -30,6 +30,11 @@ install:
 
 script:
   - travis_wait mvn test -B
+
+cache:
+  # https://docs.travis-ci.com/user/caching/#Arbitrary-directories
+  directories:
+    - $HOME/.m2
 
 notifications:
   email: false
