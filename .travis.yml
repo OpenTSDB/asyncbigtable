@@ -1,6 +1,40 @@
 language: java
+
+# sudo-enabled environment has 7.5GB of RAM vs. 4GB of RAM for container-based
+# env: https://docs.travis-ci.com/user/ci-environment/#Virtualization-environments
+sudo: required
+
+dist: trusty
+
 jdk:
-   - oraclejdk7
-   - oraclejdk8
+  - oraclejdk7
+  - oraclejdk8
+
+addons:
+  apt:
+    packages:
+      # Update the pre-installed versions of Oracle JDK 7/8 to latest.
+      - oracle-java7-installer
+      - oracle-java8-installer
+
+env:
+  # https://docs.travis-ci.com/user/environment-variables/#Global-Variables
+  global:
+    # Add more RAM; Maven is running out during the build:
+    # https://travis-ci.org/OpenTSDB/asyncbigtable/jobs/203079393
+    - MAVEN_OPTS="-Xms2048m -Xmx4096m -XX:MaxPermSize=4096m -XX:-UseGCOverheadLimit -XX:+UseG1GC"
+
+install:
+  - echo $JAVA_HOME
+  - travis_wait mvn install -DskipTests=true -Dmaven.javadoc.skip=true -B -V
+
+script:
+  - travis_wait mvn test -B
+
+cache:
+  # https://docs.travis-ci.com/user/caching/#Arbitrary-directories
+  directories:
+    - $HOME/.m2
+
 notifications:
-   email: false
+  email: false
