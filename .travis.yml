@@ -20,6 +20,8 @@ addons:
 env:
   # https://docs.travis-ci.com/user/environment-variables/#Global-Variables
   global:
+    # Ignore the defaults from /etc/mavenrc
+    - MAVEN_SKIP_RC=true
     # Add more RAM; Maven is running out during the build:
     # https://travis-ci.org/OpenTSDB/asyncbigtable/jobs/203079393
     - MAVEN_OPTS="-Xms2048m -Xmx4096m -XX:MaxPermSize=4096m -XX:-UseGCOverheadLimit -XX:+UseG1GC"
