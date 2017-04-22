@@ -40,7 +40,7 @@ This project uses [Semantic Versioning](http://semver.org/).
 
 ### 0.3.0
 
-- Updated dependency to com.google.cloud.bigtable:bigtable-hbase-1.2
+- Updated dependency to com.google.cloud.bigtable:bigtable-hbase-1.2:0.9.6
 - Updated dependency to protobuf-java:3.0.2
 - Updated dependency to netty-all 4.1.0.Final 
 
