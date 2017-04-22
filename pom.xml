@@ -1,11 +1,9 @@
-<project xmlns="http://maven.apache.org/POM/4.0.0"
-  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
 
   <groupId>com.pythian.opentsdb</groupId>
   <artifactId>asyncbigtable</artifactId>
-  <version>0.3.0-SNAPSHOT</version>
+  <version>0.3.0</version>
   <packaging>jar</packaging>
 
   <name>Async Bigtable library</name>
@@ -25,8 +23,8 @@
     </license>
   </licenses>
   <scm>
-    <connection>scm:git:git@github.com:OpenTSDB/asyncbigtable.git</connection>
-    <url>https://github.com/OpenTSDB/asyncbigtable</url>
+    <connection>scm:git:git@github.com:OpenTSDB/asyncbigtable.git/tags/v0.3.0</connection>
+    <url>https://github.com/OpenTSDB/asyncbigtable/tags/v0.3.0</url>
   </scm>
   <issueManagement>
     <system>GitHub</system>
@@ -110,7 +108,7 @@
               <quiet>true</quiet>
               <validateLinks>true</validateLinks>
               <bottom>
-                Copyright &#169; {inceptionYear}-{currentYear},
+                Copyright © {inceptionYear}-{currentYear},
                 ${project.organization.name}
               </bottom>
             </configuration>
@@ -119,7 +117,7 @@
           <plugin>
             <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-gpg-plugin</artifactId>
-            <version>1.4</version>
+            <version>1.6</version>
             <executions>
               <execution>
                 <id>sign-artifacts</id>
@@ -348,7 +346,7 @@
     <artifactId>oss-parent</artifactId>
     <version>7</version>
     <!--Empty relativePath is workaround.  See MNG-4687-->
-    <relativePath></relativePath>
+    <relativePath />
   </parent>
 
 </project>
