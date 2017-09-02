@@ -1309,6 +1309,11 @@ public final class HBaseClient {
     return Deferred.fromResult(Collections.<RegionLocation>emptyList());
   }
   
+  /** @return The Bigtable connection via the HBase API. */
+  public Connection getBigtableConnection() {
+    return hbase_connection;
+  }
+  
   // --------------- //
   // Little helpers. //
   // --------------- //
