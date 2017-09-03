@@ -7,15 +7,7 @@ sudo: required
 dist: trusty
 
 jdk:
-  - oraclejdk7
   - oraclejdk8
-
-addons:
-  apt:
-    packages:
-      # Update the pre-installed versions of Oracle JDK 7/8 to latest.
-      - oracle-java7-installer
-      - oracle-java8-installer
 
 env:
   # https://docs.travis-ci.com/user/environment-variables/#Global-Variables
