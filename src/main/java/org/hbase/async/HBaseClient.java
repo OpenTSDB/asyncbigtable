@@ -946,7 +946,7 @@ public final class HBaseClient {
     final List<Deferred<GetResultOrException>> temp_results = 
         Lists.newArrayListWithCapacity(requests.size());
     for (int i = 0; i < requests.size(); i++) {
-      temp_results.add(Deferred.fromError(
+      temp_results.add(Deferred.<GetResultOrException>fromError(
           new UnsupportedOperationException("Not implemented yet!")));
     }
     return temp_results;
