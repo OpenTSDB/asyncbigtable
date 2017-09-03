@@ -1,6 +1,6 @@
 /*
- * Copyright (C) 2015  The Async BigTable Authors.  All rights reserved.
- * This file is part of Async BigTable.
+ * Copyright (C) 2014-2017  The Async HBase Authors.  All rights reserved.
+ * This file is part of Async HBase.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -28,37 +28,28 @@ package org.hbase.async;
 
 import org.apache.hadoop.hbase.filter.Filter;
 
-import io.netty.buffer.ByteBuf;
-
 /**
- * Abstract base class for {@link org.hbase.async.Scanner} filters.
- * <p>
- * These filters are executed on the server side, inside the
- * {@code RegionServer}, while scanning.  They are useful to
- * prune uninteresting data before it gets to the network,
- * but remember that the {@code RegionServer} still has to
- * load the data before it can know whether the filter passes
- * or not, so it's generally not efficient to filter out large
- * amounts of data.
- * <p>
- * Subclasses are guaranteed to be immutable and are thus
- * thread-safe as well as usable concurrently on multiple
- * {@link org.hbase.async.Scanner} instances.
+ * Filter columns based on the qualifier. Takes an operator (equal, greater,
+ * not equal, etc). and a filter comparator.
+ * @since 1.6
  */
-public abstract class ScanFilter {
+public final class QualifierFilter extends CompareFilter {
 
-  /** Package-private constructor to avoid sub-classing outside this package. */
-  ScanFilter() {
+  private static final byte[] NAME =
+      Bytes.UTF8("org.apache.hadoop.hbase.filter.QualifierFilter");
+
+  public QualifierFilter(final CompareOp op,
+                         final FilterComparator qualifierComparator) {
+    super(op, qualifierComparator);
   }
 
-  /**
-   * Returns the name of this scanner on the wire.
-   * <p>
-   * This method is only used with HBase 0.95 and newer.
-   * The contents of the array returned MUST NOT be modified.
-   */
-  abstract byte[] name();
-
-  abstract Filter getBigtableFilter();
-
+  @Override
+  byte[] name() {
+    return NAME;
+  }
+  
+  Filter getBigtableFilter() {
+    return new org.apache.hadoop.hbase.filter.QualifierFilter(
+            CompareOp.convert(compare_op), comparator.getBigtableFilter());
+  }
 }

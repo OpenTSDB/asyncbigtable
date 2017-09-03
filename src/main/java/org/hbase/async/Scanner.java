@@ -691,17 +691,18 @@ public final class Scanner {
     // TODO - right now we ONLY push the regex filter to Bigtable. The fuzzy
     // filter isn't setup properly yet and we're not using column filters at this
     // time.
-    if (filter instanceof FilterList) {
-      for (final ScanFilter sf : ((FilterList)filter).getFilters()) {
-        if (sf instanceof KeyRegexpFilter) {
-          hbase_scan.setFilter(((KeyRegexpFilter)sf).getRegexFilterForBigtable());
-          return hbase_scan;
-        }
-      }
-    } else if (filter instanceof KeyRegexpFilter) {
-      hbase_scan.setFilter(((KeyRegexpFilter)filter).getRegexFilterForBigtable());
-      return hbase_scan;
-    }
+//    if (filter instanceof FilterList) {
+//      for (final ScanFilter sf : ((FilterList)filter).getFilters()) {
+//        if (sf instanceof KeyRegexpFilter) {
+//          hbase_scan.setFilter(((KeyRegexpFilter)sf).getRegexFilterForBigtable());
+//          return hbase_scan;
+//        }
+//      }
+//    } else if (filter instanceof KeyRegexpFilter) {
+//      hbase_scan.setFilter(((KeyRegexpFilter)filter).getRegexFilterForBigtable());
+//      return hbase_scan;
+//    }
+    hbase_scan.setFilter(filter.getBigtableFilter());
     return hbase_scan;
   }
 

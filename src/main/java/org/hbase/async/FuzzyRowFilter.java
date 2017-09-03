@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2015  The Async BigTable Authors.  All rights reserved.
+ * Copyright (C) 2015-2017  The Async BigTable Authors.  All rights reserved.
  * This file is part of Async BigTable.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -26,10 +26,14 @@
  */
 package org.hbase.async;
 
-import io.netty.buffer.ByteBuf;
-
 import java.lang.IllegalArgumentException;
 import java.util.Collection;
+import java.util.List;
+
+import org.apache.hadoop.hbase.filter.Filter;
+import org.apache.hadoop.hbase.util.Pair;
+
+import com.google.common.collect.Lists;
 
 /**
  * FuzzyRowFilter is a server-side fast-forward filter that allows skipping
@@ -137,25 +141,6 @@ public final class FuzzyRowFilter extends ScanFilter {
   }
 
   @Override
-  byte[] serialize() {
-    return null;
-  }
-
-  @Override
-  void serializeOld(ByteBuf buf) {
-    
-  }
-
-  @Override
-  int predictSerializedSize() {
-    int size = 1 + 45 + 4;
-    for (FuzzyFilterPair filter : filter_pairs) {
-      size +=  2 * ( 3 + filter.getRowKey().length );
-    }
-    return  size;
-  }
-
-  @Override
   public String toString() {
     final StringBuilder buf = new StringBuilder();
     buf.append("FuzzyFilter{")
@@ -163,4 +148,14 @@ public final class FuzzyRowFilter extends ScanFilter {
        .append("}");
     return buf.toString();
   }
+
+  @Override
+  Filter getBigtableFilter() {
+    List<Pair<byte[], byte[]>> pairs = Lists.newArrayListWithCapacity(filter_pairs.size());
+    for (final FuzzyFilterPair pair : filter_pairs) {
+      pairs.add(new Pair<byte[], byte[]>(pair.row_key, pair.fuzzy_mask));
+    }
+    return new org.apache.hadoop.hbase.filter.FuzzyRowFilter(pairs);
+  }
+  
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2015  The Async BigTable Authors.  All rights reserved.
+ * Copyright (C) 2015-2017  The Async BigTable Authors.  All rights reserved.
  * This file is part of Async BigTable.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -26,9 +26,10 @@
  */
 package org.hbase.async;
 
-import io.netty.buffer.ByteBuf;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.hadoop.hbase.filter.Filter;
+
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Lists;
 
 import java.util.List;
 
@@ -41,7 +42,8 @@ public final class FilterList extends ScanFilter {
   private static final byte[] NAME = Bytes.ISO88591("org.apache.hadoop"
       + ".hbase.filter.FilterList");
 
-  private final List<ScanFilter> filters;
+  private final List<ScanFilter> scan_filters;
+  private final List<Filter> filters;
   private final Operator op;
 
   /**
@@ -52,7 +54,16 @@ public final class FilterList extends ScanFilter {
     /** All the filters must pass ("and" semantic).  */
     MUST_PASS_ALL,
     /** At least one of the filters must pass ("or" semantic).  */
-    MUST_PASS_ONE,
+    MUST_PASS_ONE;
+    
+    static org.apache.hadoop.hbase.filter.FilterList.Operator convert(final Operator op) {
+      switch(op) {
+      case MUST_PASS_ALL:
+        return org.apache.hadoop.hbase.filter.FilterList.Operator.MUST_PASS_ALL;
+      default:
+        return org.apache.hadoop.hbase.filter.FilterList.Operator.MUST_PASS_ONE;
+      }
+    }
   }
 
   /**
@@ -75,13 +86,12 @@ public final class FilterList extends ScanFilter {
     if (filters.isEmpty()) {
       throw new IllegalArgumentException("Empty filter list");
     }
-    this.filters = filters;
+    scan_filters = filters;
+    this.filters = Lists.newArrayListWithCapacity(filters.size());
+    for (final ScanFilter f : filters) {
+      this.filters.add(f.getBigtableFilter());
+    }
     this.op = op;
-  }
-
-  @Override
-  byte[] serialize() {
-    return null;
   }
 
   @Override
@@ -89,33 +99,10 @@ public final class FilterList extends ScanFilter {
     return NAME;
   }
 
-  @Override
-  int predictSerializedSize() {
-    int size = 1 + NAME.length + 1 + 4;
-    for (final ScanFilter filter : filters) {
-      size += 2;
-      size += filter.predictSerializedSize();
-    }
-    return size;
-  }
-
-  @Override
-  void serializeOld(final ByteBuf buf) {
-    buf.writeByte((byte) NAME.length);   // 1
-    buf.writeBytes(NAME);                //41
-    buf.writeByte((byte) op.ordinal());  // 1
-    buf.writeInt(filters.size());        // 4
-    for (final ScanFilter filter : filters) {
-      buf.writeByte(54);  // 1 : code for WritableByteArrayComparable
-      buf.writeByte(0);   // 1 : code for NOT_ENCODED
-      filter.serializeOld(buf);
-    }
-  }
-
   public String toString() {
     final StringBuilder buf = new StringBuilder(32 + filters.size() * 48);
     buf.append("FilterList(filters=[");
-    for (final ScanFilter filter : filters) {
+    for (final Filter filter : filters) {
       buf.append(filter.toString());
       buf.append(", ");
     }
@@ -124,7 +111,24 @@ public final class FilterList extends ScanFilter {
     return buf.toString();
   }
 
-  List<ScanFilter> getFilters() {
+  /** @return An immutable copy of the filter list (though each filter could 
+   * still be modified)
+   *  @since 1.8 */
+  public List<ScanFilter> filters() {
+    return ImmutableList.copyOf(scan_filters);
+  }
+  
+  List<Filter> getFilters() {
     return filters;
+  }
+
+  @Override
+  Filter getBigtableFilter() {
+    org.apache.hadoop.hbase.filter.FilterList list = 
+        new org.apache.hadoop.hbase.filter.FilterList(Operator.convert(op));
+    for (final Filter f : filters) {
+      list.addFilter(f);
+    }
+    return list;
   }
 }

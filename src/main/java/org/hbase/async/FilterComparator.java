@@ -1,6 +1,6 @@
 /*
- * Copyright (C) 2015  The Async BigTable Authors.  All rights reserved.
- * This file is part of Async BigTable.
+ * Copyright (C) 2014-2017  The Async HBase Authors.  All rights reserved.
+ * This file is part of Async HBase.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -26,30 +26,27 @@
  */
 package org.hbase.async;
 
-import org.apache.hadoop.hbase.filter.Filter;
+import org.apache.hadoop.hbase.filter.ByteArrayComparable;
 
 import io.netty.buffer.ByteBuf;
 
 /**
- * Abstract base class for {@link org.hbase.async.Scanner} filters.
+ * Abstract base class for {@link ScanFilter} comparators.
  * <p>
- * These filters are executed on the server side, inside the
- * {@code RegionServer}, while scanning.  They are useful to
- * prune uninteresting data before it gets to the network,
- * but remember that the {@code RegionServer} still has to
- * load the data before it can know whether the filter passes
- * or not, so it's generally not efficient to filter out large
- * amounts of data.
+ * These comparators are used by scan filters.
  * <p>
  * Subclasses are guaranteed to be immutable and are thus
  * thread-safe as well as usable concurrently on multiple
- * {@link org.hbase.async.Scanner} instances.
+ * {@link Scanner} instances.
+ * @since 1.6
  */
-public abstract class ScanFilter {
+public abstract class FilterComparator {
 
-  /** Package-private constructor to avoid sub-classing outside this package. */
-  ScanFilter() {
-  }
+  // This class is the equivalent of HBase's WritableByteArrayComparable.
+  // We don't need this class to be Writable or Comparable, so
+  // FilterComparator is a more appropriate name.
+
+  final static byte CODE = 54;
 
   /**
    * Returns the name of this scanner on the wire.
@@ -58,7 +55,32 @@ public abstract class ScanFilter {
    * The contents of the array returned MUST NOT be modified.
    */
   abstract byte[] name();
+  
+  /**
+   * Serializes the byte representation to the RPC channel buffer.
+   * <p>
+   * This method is only used with HBase 0.94 and before.
+   * @param buf The RPC channel buffer to which the byte array is serialized
+   */
+  void serializeOld(ByteBuf buf) {
+    buf.writeByte(CODE);  // 1
+  }
 
-  abstract Filter getBigtableFilter();
+  /**
+   * Returns the number of bytes that it will write to the RPC channel buffer
+   * when {@code serialize} is called. This method helps predict the initial
+   * size of the byte array
+   * <p>
+   * This method is only used with HBase 0.94 and before.
+   * @return A strictly positive integer
+   */
+  int predictSerializedSize() {
+    return 1;
+  }
 
+  /**
+   * Converts the filter for Bigtable's HBase interface.
+   * @return The converted filter.
+   */
+  abstract ByteArrayComparable getBigtableFilter();
 }

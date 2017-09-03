@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2015  The Async BigTable Authors.  All rights reserved.
+ * Copyright (C) 2015-2017  The Async BigTable Authors.  All rights reserved.
  * This file is part of Async BigTable.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -31,11 +31,11 @@ import org.apache.hadoop.hbase.filter.CompareFilter;
 import org.apache.hadoop.hbase.filter.Filter;
 import org.apache.hadoop.hbase.filter.RegexStringComparator;
 import org.apache.hadoop.hbase.filter.RowFilter;
-import io.netty.buffer.ByteBuf;
 import io.netty.util.CharsetUtil;
 
 import java.lang.reflect.Field;
 import java.nio.charset.Charset;
+import java.util.Arrays;
 
 /**
  * Filters rows based on an expression applied to the row key.
@@ -122,8 +122,31 @@ public final class KeyRegexpFilter extends ScanFilter {
     regexp_string = new String(regexp, charset);
     charset_object = charset;
   }
+  
+  @Override
+  byte[] name() {
+    return ROWFILTER;
+  }
 
-  Filter getRegexFilterForBigtable() {
+  public String toString() {
+    return "KeyRegexpFilter(\"" + new String(regexp, CharsetUtil.UTF_8)
+      + "\", " + new String(charset, CharsetUtil.UTF_8) + ')';
+  }
+
+  /** @return the regular expression, a copy of the byte array
+   *  @since 1.8 */
+  public byte[] getRegexp() {
+    return Arrays.copyOf(regexp, regexp.length);
+  }
+  
+  /** @return the character set for this regular expression
+   *  @since 1.8 */
+  public Charset getCharset() {
+    return Charset.forName(new String(charset));
+  }
+  
+  @Override
+  Filter getBigtableFilter() {
     RegexStringComparator comparator = new RegexStringComparator(regexp_string);
     comparator.setCharset(charset_object);
     try {
@@ -147,47 +170,6 @@ public final class KeyRegexpFilter extends ScanFilter {
        throw new RuntimeException("Access denied when hacking the "
           + "regex comparator field", e);
     }
-  }
-  
-  @Override
-  byte[] serialize() {
-    return null;
-  }
-
-  @Override
-  byte[] name() {
-    return ROWFILTER;
-  }
-
-  @Override
-  void serializeOld(final ByteBuf buf) {
-    buf.writeByte((byte) ROWFILTER.length);                     // 1
-    buf.writeBytes(ROWFILTER);                                  // 40
-    // writeUTF of the comparison operator
-    buf.writeShort(5);                                          // 2
-    buf.writeBytes(EQUAL);                                      // 5
-    // The comparator: a RegexStringComparator
-    buf.writeByte(54);  // Code for WritableByteArrayComparable // 1
-    buf.writeByte(0);   // Code for "this has no code".         // 1
-    buf.writeByte((byte) REGEXSTRINGCOMPARATOR.length);         // 1
-    buf.writeBytes(REGEXSTRINGCOMPARATOR);                      // 52
-    // writeUTF the regexp
-    buf.writeShort(regexp.length);                              // 2
-    buf.writeBytes(regexp);                                     // regexp.length
-    // writeUTF the charset
-    buf.writeShort(charset.length);                             // 2
-    buf.writeBytes(charset);                                    // charset.length
-  }
-
-  @Override
-  int predictSerializedSize() {
-    return 1 + 40 + 2 + 5 + 1 + 1 + 1 + 52
-        + 2 + regexp.length + 2 + charset.length;
-  }
-
-  public String toString() {
-    return "KeyRegexpFilter(\"" + new String(regexp, CharsetUtil.UTF_8)
-      + "\", " + new String(charset, CharsetUtil.UTF_8) + ')';
   }
 
 }

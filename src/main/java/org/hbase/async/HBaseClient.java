@@ -26,7 +26,9 @@
  */
 package org.hbase.async;
 
+import com.google.bigtable.repackaged.com.google.common.collect.Lists;
 import com.google.common.cache.LoadingCache;
+import com.stumbleupon.async.Callback;
 import com.stumbleupon.async.Deferred;
 
 import org.apache.hadoop.conf.Configuration;
@@ -42,6 +44,7 @@ import org.apache.hadoop.hbase.client.ConnectionFactory;
 import org.apache.hadoop.hbase.client.Delete;
 import org.apache.hadoop.hbase.client.Durability;
 import org.apache.hadoop.hbase.client.Get;
+import org.apache.hadoop.hbase.client.MultiAction;
 import org.apache.hadoop.hbase.client.Put;
 import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.client.ResultScanner;
@@ -59,8 +62,10 @@ import java.io.IOException;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
 import java.util.NavigableMap;
 import java.util.concurrent.ConcurrentHashMap;
@@ -750,6 +755,203 @@ public final class HBaseClient {
       }
   }
 
+  /** Singleton callback to handle responses of "get" RPCs.  */
+  private static final Callback<ArrayList<KeyValue>, Object> got =
+    new Callback<ArrayList<KeyValue>, Object>() {
+      public ArrayList<KeyValue> call(final Object response) {
+        if (response instanceof ArrayList) {
+          @SuppressWarnings("unchecked")
+          final ArrayList<KeyValue> row = (ArrayList<KeyValue>) response;
+          return row;
+        } else {
+          throw new InvalidResponseException(ArrayList.class, response);
+        }
+      }
+      public String toString() {
+        return "type get response";
+      }
+    };
+    
+  private static final Callback<GetResultOrException, Object> MUL_GOT_ONE = 
+      new Callback<GetResultOrException, Object>() {
+        public GetResultOrException call(final Object response) {
+          if (response instanceof ArrayList) {
+            @SuppressWarnings("unchecked")
+            final ArrayList<KeyValue> row = (ArrayList<KeyValue>) response;
+            return new GetResultOrException(row);
+          } else if (response instanceof Exception) {
+            Exception e = (Exception) (response);
+            return new GetResultOrException(e);
+          } else {
+            return new GetResultOrException(new InvalidResponseException(ArrayList.class, response));
+          }
+        }
+
+        public String toString() {
+          return "type mul get one response";
+        }
+    };
+
+  /**
+   * Execute multiple "get"s against Bigtable in a batch.
+   * @param requests A non-null list of 1 or more RPCs.
+   * @return A deferred to wait on that will resolve to the results or an exception.
+   */
+  public Deferred<List<GetResultOrException>> get(final List<GetRequest> requests) {
+    return Deferred.groupInOrder(multiGet(requests))
+        .addCallback(
+            new Callback<List<GetResultOrException>, ArrayList<GetResultOrException>>() {
+              public List<GetResultOrException> call(ArrayList<GetResultOrException> results) {
+                return results;
+              }
+            }
+        );
+  }
+
+  private List<Deferred<GetResultOrException>> multiGet(final List<GetRequest> requests) {
+    
+//    final class MultiActionCallback implements Callback<Object, Object> {
+//      
+//      final MultiAction request;
+//      public MultiActionCallback(final MultiAction request) {
+//        this.request = request;
+//      }
+//      
+//      // TODO - double check individual RPC timer timeouts.
+//      public Object call(final Object resp) {
+//        if (!(resp instanceof MultiAction.Response)) {
+//          if (resp instanceof BatchableRpc) {  // Single-RPC multi-action?
+//            return null;  // Yes, nothing to do.  See multiActionToSingleAction.
+//          } else if (resp instanceof Exception) {
+//            return handleException((Exception) resp);
+//          }
+//          throw new InvalidResponseException(MultiAction.Response.class, resp);
+//        }
+//        final MultiAction.Response response = (MultiAction.Response) resp;
+//        final ArrayList<BatchableRpc> batch = request.batch();
+//        final int n = batch.size();
+//        for (int i = 0; i < n; i++) {
+//          final BatchableRpc rpc = batch.get(i);
+//          final Object r = response.result(i);
+//          if (r instanceof RecoverableException) {
+//            if (r instanceof NotServingRegionException ||
+//                r instanceof RegionMovedException || 
+//                r instanceof RegionServerStoppedException) {
+//              // We need to do NSRE handling here too, as the response might
+//              // have come back successful, but only some parts of the batch
+//              // could have encountered an NSRE.
+//              try {
+//              handleNSRE(rpc, rpc.getRegion().name(),
+//                                      (NotServingRegionException) r);
+//              } catch (RuntimeException e) {
+//                LOG.error("Unexpected exception processing NSRE for RPC " + rpc, e);
+//                rpc.callback(e);
+//              }
+//            } else {
+//              // TODO - potentially retry?
+//              //retryEdit(rpc, (RecoverableException) r);
+//            }
+//          } else {
+//            rpc.callback(r);
+//          }
+//        }
+//        // We're successful.  If there was a problem, the exception was
+//        // delivered to the specific RPCs that failed, and they will be
+//        // responsible for retrying.
+//        return null;
+//      }
+//
+//      private Object handleException(final Exception e) {
+//        if (!(e instanceof RecoverableException)) {
+//          for (final BatchableRpc rpc : request.batch()) {
+//            rpc.callback(e);
+//          }
+//          return e;  // Can't recover from this error, let it propagate.
+//        }
+//        if (LOG.isDebugEnabled()) {
+//          LOG.debug(this + " Multi-action request failed, retrying each of the "
+//                    + request.size() + " RPCs individually.", e);
+//        }
+//        for (final BatchableRpc rpc : request.batch()) {
+//          if (e instanceof NotServingRegionException ||
+//              e instanceof RegionMovedException || 
+//              e instanceof RegionServerStoppedException) {
+//            try {
+//            handleNSRE(rpc, rpc.getRegion().name(),
+//                                    (NotServingRegionException) e);
+//            } catch (RuntimeException ex) {
+//              LOG.error("Unexpected exception trying to NSRE the RPC " + rpc, ex);
+//              rpc.callback(ex);
+//            }
+//          } else {
+//            // TODO - potentially retry?
+//            //retryEdit(rpc, (RecoverableException) e);
+//          }
+//        }
+//        return null;  // We're retrying, so let's call it a success for now.
+//      }
+//
+//      public String toString() {
+//        return "multi-action response";
+//      }
+//    };
+//    
+//    final List<Deferred<GetResultOrException>> result_deferreds =
+//        new ArrayList<Deferred<GetResultOrException>>(requests.size());
+//
+//    final Map<RegionClient, MultiAction> batch_by_region = 
+//        new HashMap<RegionClient, MultiAction>();
+//    
+//    // Split gets according to regions.
+//    for (int i = 0; i < requests.size(); i++) {
+//      final GetRequest request = requests.get(i);
+//      final byte[] table = request.table;
+//      final byte[] key = request.key;
+//      
+//      // maybe be able to just use discoverRegion() here.
+//      final RegionInfo region = getRegion(table, key);
+//      RegionClient client = null;
+//      if (region != null) {
+//        client = (Bytes.equals(region.table(), ROOT)
+//                  ? rootregion : region2client.get(region));
+//      }
+//
+//      if (client == null || !client.isAlive()) {
+//        // no region or client found so we need to perform the entire lookup. 
+//        // Therefore these won't get the batch treatment.
+//        result_deferreds.add(sendRpcToRegion(request).addBoth(MUL_GOT_ONE));
+//        continue;
+//      }
+//
+//      request.setRegion(region);
+//      MultiAction batch = batch_by_region.get(client);
+//      if (batch == null) {
+//        batch = new MultiAction();
+//        batch_by_region.put(client, batch);
+//      }
+//      batch.add(request);
+//      
+//      result_deferreds.add(request.getDeferred().addBoth(MUL_GOT_ONE));
+//    }
+//
+//    for (Map.Entry<RegionClient, MultiAction> entry : batch_by_region.entrySet()) {
+//      final MultiAction request = entry.getValue();
+//      final Deferred<Object> d = request.getDeferred();
+//      d.addBoth(new MultiActionCallback(request));
+//      entry.getKey().sendRpc(request);
+//    }
+//
+//    return result_deferreds;
+    // TODO - fail it all!
+    final List<Deferred<GetResultOrException>> temp_results = 
+        Lists.newArrayListWithCapacity(requests.size());
+    for (int i = 0; i < requests.size(); i++) {
+      temp_results.add(Deferred.fromError(
+          new UnsupportedOperationException("Not implemented yet!")));
+    }
+    return temp_results;
+  }
+  
   /**
    * Creates a new {@link Scanner} for a particular table.
    * @param table The name of the table you intend to scan.
