@@ -26,7 +26,8 @@
  */
 package org.hbase.async;
 
-import com.google.bigtable.repackaged.com.google.common.collect.Lists;
+import com.google.common.collect.Lists;
+import com.google.cloud.bigtable.hbase.BigtableConfiguration;
 import com.google.common.cache.LoadingCache;
 import com.stumbleupon.async.Callback;
 import com.stumbleupon.async.Deferred;
@@ -40,7 +41,6 @@ import org.apache.hadoop.hbase.client.Append;
 import org.apache.hadoop.hbase.client.BufferedMutator;
 import org.apache.hadoop.hbase.client.BufferedMutatorParams;
 import org.apache.hadoop.hbase.client.Connection;
-import org.apache.hadoop.hbase.client.ConnectionFactory;
 import org.apache.hadoop.hbase.client.Delete;
 import org.apache.hadoop.hbase.client.Durability;
 import org.apache.hadoop.hbase.client.Get;
@@ -62,10 +62,8 @@ import java.io.IOException;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 import java.util.Map.Entry;
 import java.util.NavigableMap;
 import java.util.concurrent.ConcurrentHashMap;
@@ -278,20 +276,24 @@ public final class HBaseClient {
    * the executor.
    */
   public HBaseClient(final Config config, final ExecutorService executor) {
-    this.executor = executor;
-    hbase_config = HBaseConfiguration.create();
-    for (final Entry<String, String> entry : config.getMap().entrySet()) {
-      hbase_config.set(entry.getKey(), entry.getValue());
-    }
-    LOG.info("BigTable API: Connecting with config: {}", hbase_config);
-    try {
-      hbase_connection = ConnectionFactory.createConnection(hbase_config);
-    } catch (IOException e) {
-      throw new NonRecoverableException(
-          "Failed to create conection with config: " + hbase_config, e);
-    }
+    this(toHBaseConfig(config), executor);
   }
-  
+
+  public HBaseClient(final Configuration configuration, final ExecutorService executor) {
+    this.executor = executor;
+    hbase_config = configuration;
+    LOG.info("BigTable API: Connecting with config: {}", hbase_config);
+    hbase_connection = BigtableConfiguration.connect(hbase_config);
+  }
+
+  private static Configuration toHBaseConfig(final Config config) {
+    Configuration conf = HBaseConfiguration.create();
+    for (final Entry<String, String> entry : config.getMap().entrySet()) {
+      conf.set(entry.getKey(), entry.getValue());
+    }
+    return conf;
+  }
+
   /**
    * Returns a snapshot of usage statistics for this client.
    */
@@ -1247,7 +1249,6 @@ public final class HBaseClient {
   public Deferred<Object> put(final PutRequest request) {
     num_puts.increment();
 
-    long start = System.currentTimeMillis();
     try {
       Put put = new Put(request.key());
 
@@ -1259,7 +1260,6 @@ public final class HBaseClient {
       BufferedMutator bm = getBufferedMutator(TableName.valueOf(request.table()));
       bm.mutate(put);
 
-      long end = System.currentTimeMillis();
       return Deferred.fromResult(null);
     } catch (IOException e) {
       return Deferred.fromError(e);
