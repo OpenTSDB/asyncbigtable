@@ -27,7 +27,14 @@
 package org.hbase.async;
 
 import com.google.common.collect.Lists;
+import com.google.common.util.concurrent.FutureCallback;
+import com.google.common.util.concurrent.ListenableFuture;
+import com.google.common.util.concurrent.Futures;
+import com.google.bigtable.v2.ReadModifyWriteRowRequest;
+import com.google.cloud.bigtable.grpc.BigtableSession;
+import com.google.cloud.bigtable.grpc.async.BulkMutation;
 import com.google.cloud.bigtable.hbase.BigtableConfiguration;
+import com.google.cloud.bigtable.hbase.adapters.HBaseRequestAdapter;
 import com.google.common.cache.LoadingCache;
 import com.stumbleupon.async.Callback;
 import com.stumbleupon.async.Deferred;
@@ -36,10 +43,9 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.HBaseConfiguration;
 import org.apache.hadoop.hbase.HColumnDescriptor;
 import org.apache.hadoop.hbase.TableName;
+import org.apache.hadoop.hbase.client.AbstractBigtableConnection;
 import org.apache.hadoop.hbase.client.Admin;
 import org.apache.hadoop.hbase.client.Append;
-import org.apache.hadoop.hbase.client.BufferedMutator;
-import org.apache.hadoop.hbase.client.BufferedMutatorParams;
 import org.apache.hadoop.hbase.client.Connection;
 import org.apache.hadoop.hbase.client.Delete;
 import org.apache.hadoop.hbase.client.Durability;
@@ -48,7 +54,6 @@ import org.apache.hadoop.hbase.client.MultiAction;
 import org.apache.hadoop.hbase.client.Put;
 import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.client.ResultScanner;
-import org.apache.hadoop.hbase.client.RetriesExhaustedWithDetailsException;
 import org.apache.hadoop.hbase.client.Table;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -88,6 +93,14 @@ public final class HBaseClient {
    * {@link Scanner#setStartKey} and {@link Scanner#setStopKey}.
    */
   public static final byte[] EMPTY_ARRAY = new byte[0];
+
+  private static Configuration toHBaseConfig(final Config config) {
+    Configuration conf = HBaseConfiguration.create();
+    for (final Entry<String, String> entry : config.getMap().entrySet()) {
+      conf.set(entry.getKey(), entry.getValue());
+    }
+    return conf;
+  }
 
   /**
    * Timer we use to handle all our timeouts.
@@ -179,12 +192,15 @@ public final class HBaseClient {
   private final Configuration hbase_config;
 
  /** BigTable client connection using the standard BigTable drive */
-  private final Connection hbase_connection;
+  private final AbstractBigtableConnection hbase_connection;
+
+  /** BigTable client connection using the the lower level BigTable drive */
+  private final BigtableSession bigtable_session;
 
   private final ExecutorService executor;
 
-  private final ConcurrentHashMap<TableName, BufferedMutator> mutators = 
-      new ConcurrentHashMap<TableName, BufferedMutator>();
+  private final ConcurrentHashMap<TableName, BulkMutation> mutators = 
+      new ConcurrentHashMap<TableName, BulkMutation>();
 
   /**
    * Legacy constructor for projects using the AsyncBigTable client.
@@ -245,7 +261,7 @@ public final class HBaseClient {
   public HBaseClient(final Config config) {
     this(config, Executors.newCachedThreadPool());
   }
-  
+
   /**
    * Ctor that reads settings from the hbase-site.xml in HBASE_HOME
    * @param executor The executor from which to obtain threads for NIO
@@ -283,15 +299,12 @@ public final class HBaseClient {
     this.executor = executor;
     hbase_config = configuration;
     LOG.info("BigTable API: Connecting with config: {}", hbase_config);
-    hbase_connection = BigtableConfiguration.connect(hbase_config);
+    hbase_connection = (AbstractBigtableConnection) BigtableConfiguration.connect(hbase_config);
+    bigtable_session = hbase_connection.getSession();
   }
 
-  private static Configuration toHBaseConfig(final Config config) {
-    Configuration conf = HBaseConfiguration.create();
-    for (final Entry<String, String> entry : config.getMap().entrySet()) {
-      conf.set(entry.getKey(), entry.getValue());
-    }
-    return conf;
+  Connection getHbaseConnection() {
+    return hbase_connection;
   }
 
   /**
@@ -344,21 +357,27 @@ public final class HBaseClient {
     LOG.info("Flushing buffered mutations");
     final ArrayList<Deferred<Object>> deferreds = 
       new ArrayList<Deferred<Object>>(mutators.size());
-    for (final BufferedMutator mutator : mutators.values()) {
-      try {
-        // TODO - run in a separate thread, breaks asynchronus behavior 
-        // right now
-        mutator.flush();
-        deferreds.add(Deferred.fromResult(null));
-      } catch (IOException e) {
-        LOG.error("Error occurred while flushing buffer", e);
-        deferreds.add(Deferred.fromError(e));
-      }
+    for (final BulkMutation mutator : mutators.values()) {
+      // TODO - run in a separate thread, breaks asynchronus behavior 
+      // right now
+      final Deferred<Object> deferred = new Deferred<Object>();
+      executor.submit(new Runnable() {
+        @Override
+        public void run() {
+          try {
+            mutator.flush();
+            deferred.callback(null);
+          } catch (InterruptedException e) {
+            deferred.callback(e);
+          } catch(Exception e) {
+            e.printStackTrace();
+          }
+        }
+      });
+      deferreds.add(deferred);
     }
     num_flushes.increment();
-    @SuppressWarnings("unchecked")
-    final Deferred<Object> flushed = (Deferred) Deferred.group(deferreds);
-    return flushed;
+    return (Deferred<Object>) (Deferred) Deferred.group(deferreds);
   }
 
   /**
@@ -540,12 +559,12 @@ public final class HBaseClient {
 
     // Close all open BufferedMutator instances
     ArrayList<Deferred<Object>> d = 
-        new ArrayList<Deferred<Object>>(mutators.size() + 1);
-    for (BufferedMutator bm : mutators.values()) {
+        new ArrayList<Deferred<Object>>(mutators.size());
+    for (BulkMutation bm : mutators.values()) {
       try {
-        bm.close();
+        bm.flush();
         d.add(Deferred.fromResult(null));
-      } catch (IOException e) {
+      } catch (InterruptedException e) {
         d.add(Deferred.fromError(e));
       }
     }
@@ -1257,13 +1276,29 @@ public final class HBaseClient {
         put.addColumn(request.family, request.qualifiers()[i], ts, 
             request.values()[i]);
       }
-      BufferedMutator bm = getBufferedMutator(TableName.valueOf(request.table()));
-      bm.mutate(put);
-
-      return Deferred.fromResult(null);
+      TableName tableName = TableName.valueOf(request.table());
+      BulkMutation bm = getBulkMutator(tableName);
+      HBaseRequestAdapter adapter = hbase_connection.createAdapter(tableName);
+      return toDeffered(bm.add(adapter.adaptEntry(put)));
     } catch (IOException e) {
       return Deferred.fromError(e);
     }
+  }
+
+  private static <T> Deferred<Object> toDeffered(ListenableFuture<T> future) {
+    final Deferred<Object> deffered = new Deferred<Object>();
+    Futures.addCallback(future, new FutureCallback<T>() {
+      @Override
+      public void onSuccess(T result) {
+        deffered.callback(result);
+      }
+
+      @Override
+      public void onFailure(Throwable t) {
+        deffered.callback(t);
+      }
+    });
+    return deffered;
   }
 
   /**
@@ -1282,20 +1317,16 @@ public final class HBaseClient {
    */
   public Deferred<Object> append(final AppendRequest request) {
     num_appends.increment();
-    
-    try {
-      final Append append = new Append(request.key);
-      for (int i = 0; i < request.qualifiers().length; i++) {
-        append.add(request.family, request.qualifiers()[i], request.values()[i]);
-      }
-      BufferedMutator bm = getBufferedMutator(TableName.valueOf(request.table()));
-      bm.mutate(append);
-      return Deferred.fromResult(null);
-    } catch (IOException e) {
-      return Deferred.fromError(e);
+
+    final Append append = new Append(request.key);
+    for (int i = 0; i < request.qualifiers().length; i++) {
+      append.add(request.family, request.qualifiers()[i], request.values()[i]);
     }
+    TableName tableName = TableName.valueOf(request.table());
+    ReadModifyWriteRowRequest rmwRequest = hbase_connection.createAdapter(tableName).adapt(append);
+    return toDeffered(bigtable_session.getDataClient().readModifyWriteRowAsync(rmwRequest));
   }
-  
+
   /**
    * Atomic Compare-And-Set (CAS) on a single cell.
    * <p>
@@ -1408,39 +1439,25 @@ public final class HBaseClient {
   public Deferred<Object> delete(final DeleteRequest request) {
     num_deletes.increment();
 
-    Table table = null;
-    try {
-      table = hbase_connection.getTable(TableName.valueOf(request.table()));
-      Delete delete = new Delete(request.key());
-      long ts = request.timestamp();
+    TableName tableName = TableName.valueOf(request.table());
+    Delete delete = new Delete(request.key());
+    long ts = request.timestamp();
 
-      if (request.family() != null) {
-        if (request.qualifiers() != null && request.qualifiers().length > 0) {
-          for (int i = 0; i < request.qualifiers().length; i++) {
-            if (request.deleteAtTimestampOnly()) {
-              delete.addColumn(request.family, request.qualifiers()[i], ts);
-            } else {
-              delete.addColumns(request.family, request.qualifiers()[i], ts);
-            }
+    if (request.family() != null) {
+      if (request.qualifiers() != null && request.qualifiers().length > 0) {
+        for (int i = 0; i < request.qualifiers().length; i++) {
+          if (request.deleteAtTimestampOnly()) {
+            delete.addColumn(request.family, request.qualifiers()[i], ts);
+          } else {
+            delete.addColumns(request.family, request.qualifiers()[i], ts);
           }
-        } else {
-          delete.addFamily(request.family, ts);
         }
-      }
-      table.delete(delete);
-
-      return Deferred.fromResult(null);
-    } catch (IOException e) {
-      return Deferred.fromError(e);
-    } finally {
-      if (table != null) {
-        try {
-          table.close();
-        } catch (IOException e) {
-          return Deferred.fromError(e);
-        }
+      } else {
+        delete.addFamily(request.family, ts);
       }
     }
+    HBaseRequestAdapter adapter = hbase_connection.createAdapter(tableName);
+    return toDeffered(bigtable_session.getDataClient().mutateRowAsync(adapter.adapt(delete)));
   }
 
   /**
@@ -1520,31 +1537,13 @@ public final class HBaseClient {
   // Little helpers. //
   // --------------- //
   
-  private BufferedMutator getBufferedMutator(TableName table) throws IOException {
-    BufferedMutator mutator = mutators.get(table);
+  private BulkMutation getBulkMutator(TableName table) throws IOException {
+    BulkMutation mutator = mutators.get(table);
 
     if (mutator == null) {
       synchronized (mutators) {
-
-      BufferedMutator.ExceptionListener listener =
-              new BufferedMutator.ExceptionListener() {
-                  @Override
-                  public void onException(RetriesExhaustedWithDetailsException e,
-                                          BufferedMutator mutator) {
-                      for (int i = 0; i < e.getNumExceptions(); i++) {
-                        // TODO - these need to be tied to their put requests and
-                        // return the exception
-                          LOG.error("Failed to sent put: " + e.getRow(i));
-                      }
-                  }
-              };
-        BufferedMutatorParams params = new BufferedMutatorParams(table)
-                .listener(listener);
-        if (executor != null) {
-            params = params.pool(executor);
-        }
-
-        mutator = hbase_connection.getBufferedMutator(params);
+        mutator = bigtable_session.createBulkMutation(
+          bigtable_session.getOptions().getInstanceName().toTableName(table.getNameAsString()));
         mutators.put(table, mutator);
       }
     }
