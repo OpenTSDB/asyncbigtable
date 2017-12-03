@@ -146,6 +146,29 @@
         </plugins>
       </build>
     </profile>
+    <!-- The Configuration of the integration-test profile -->
+    <profile>
+      <id>bt-integration-test</id>
+      <properties>
+          <build.profile.id>bt-integration-test</build.profile.id>
+      </properties>
+      <build>
+        <plugins>
+        <plugin>
+          <artifactId>maven-failsafe-plugin</artifactId>
+          <version>2.18.1</version>
+          <executions>
+            <execution>
+              <goals>
+                <goal>integration-test</goal>
+                <goal>verify</goal>
+              </goals>
+            </execution>
+          </executions>
+        </plugin>
+        </plugins>
+      </build>
+    </profile>
 
   </profiles>
 
@@ -190,13 +213,6 @@
   </build>
 
   <dependencies>
-
-    <dependency>
-      <groupId>com.google.guava</groupId>
-      <artifactId>guava</artifactId>
-      <version>18.0</version>
-    </dependency>
-
     <dependency>
       <groupId>com.stumbleupon</groupId>
       <artifactId>async</artifactId>
@@ -213,18 +229,6 @@
       <groupId>com.google.cloud.bigtable</groupId>
       <artifactId>bigtable-hbase-1.x</artifactId>
       <version>1.0.0</version>
-    </dependency>
-
-    <dependency>
-      <groupId>com.google.protobuf</groupId>
-      <artifactId>protobuf-java</artifactId>
-      <version>3.0.2</version>
-    </dependency>
-
-    <dependency>
-      <groupId>io.netty</groupId>
-      <artifactId>netty-all</artifactId>
-      <version>4.1.0.Final</version>
     </dependency>
 
     <!-- runtime dependencies -->
@@ -246,26 +250,6 @@
       <groupId>commons-configuration</groupId>
       <artifactId>commons-configuration</artifactId>
       <version>1.10</version>
-    </dependency>
-
-    <dependency>
-      <groupId>org.apache.hadoop</groupId>
-      <artifactId>hadoop-auth</artifactId>
-      <version>2.5.1</version>
-      <exclusions>
-        <exclusion>
-          <groupId>log4j</groupId>
-          <artifactId>log4j</artifactId>
-        </exclusion>
-        <exclusion>
-          <groupId>org.apache.directory.server</groupId>
-          <artifactId>apacheds-kerberos-codec</artifactId>
-        </exclusion>
-        <exclusion>
-          <groupId>org.slf4j</groupId>
-          <artifactId>slf4j-log4j12</artifactId>
-        </exclusion>
-      </exclusions>
     </dependency>
 
     <!-- test dependencies -->
