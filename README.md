@@ -34,6 +34,12 @@ jar does not include all dependencies but only the ones for OpenTSDB.
 Since AsyncBigtable tries to be 100% compatible with AsyncHBase, please read the 
 [AsyncHBase javadoc](http://opentsdb.github.io/asynchbase/javadoc/index.html).
 
+## Integration Tests
+
+Integration tests can be run as follows:
+
+    mvn clean verify -Pbt-integration-test -Dgoogle.bigtable.project.id=<projectId> -Dgoogle.bigtable.instance.id=<instanceId> 
+
 ## Changelog
 
 This project uses [Semantic Versioning](http://semver.org/).

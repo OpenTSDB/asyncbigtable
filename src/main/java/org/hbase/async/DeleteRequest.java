@@ -52,7 +52,7 @@ public final class DeleteRequest extends BatchableRpc
     new byte[][] { HBaseClient.EMPTY_ARRAY };
 
   /** Special value for {@link #family} when deleting a whole row.  */
-  static final byte[] WHOLE_ROW = new byte[0];
+  static final byte[] WHOLE_ROW = null;
 
   private final byte[][] qualifiers;
 

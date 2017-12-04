@@ -747,13 +747,7 @@ public final class HBaseClient {
       } catch (IOException e) {
         return Deferred.fromError(e);
       } finally {
-        if (table != null) {
-          try {
-            table.close();
-          } catch (IOException e) {
-            LOG.error("Failed to close table {}", table, e);
-          }
-        }
+        close(table);
       }
   }
 
@@ -1064,13 +1058,7 @@ public final class HBaseClient {
     } catch (IOException e) {
       return Deferred.fromError(e);
     } finally {
-      if (table != null) {
-        try {
-          table.close();
-        } catch (IOException e) {
-          LOG.error("Failed to close table {}", table, e);
-        }
-      }
+      close(table);
     }
   }
 
@@ -1283,16 +1271,26 @@ public final class HBaseClient {
   public Deferred<Object> append(final AppendRequest request) {
     num_appends.increment();
     
+    Table table = null;
     try {
       final Append append = new Append(request.key);
       for (int i = 0; i < request.qualifiers().length; i++) {
         append.add(request.family, request.qualifiers()[i], request.values()[i]);
       }
-      BufferedMutator bm = getBufferedMutator(TableName.valueOf(request.table()));
-      bm.mutate(append);
-      return Deferred.fromResult(null);
+
+      table = hbase_connection.getTable(TableName.valueOf(request.table()));
+      Result result = table.append(append);
+      return Deferred.<Object> fromResult(result);
     } catch (IOException e) {
       return Deferred.fromError(e);
+    } finally {
+      if (table != null) {
+        try {
+          table.close();
+        } catch (IOException e) {
+          return Deferred.fromError(e);
+        }
+      }
     }
   }
   
@@ -1352,12 +1350,16 @@ public final class HBaseClient {
     } catch (IOException e) {
       return Deferred.fromError(e);
     } finally {
-      if (table != null) {
-        try {
-          table.close();
-        } catch (IOException e) {
-          LOG.error("Failed to close table {}", table, e);
-        }
+      close(table);
+    }
+  }
+
+  private void close(Table table) {
+    if (table != null) {
+      try {
+        table.close();
+      } catch (IOException e) {
+        LOG.error("Failed to close table {}", table, e);
       }
     }
   }
