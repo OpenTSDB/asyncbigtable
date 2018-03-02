@@ -25,26 +25,30 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */package org.hbase.async;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 
 import org.apache.commons.lang.ArrayUtils;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.HColumnDescriptor;
 import org.apache.hadoop.hbase.HTableDescriptor;
 import org.apache.hadoop.hbase.TableName;
-import org.apache.hadoop.hbase.client.Admin;
+import org.apache.hadoop.hbase.TableNotFoundException;
+import org.apache.hadoop.hbase.client.AsyncAdmin;
+import org.apache.hadoop.hbase.shaded.com.google.common.primitives.Longs;
 import org.apache.hadoop.hbase.shaded.org.junit.AfterClass;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.junit.Assert;
 import org.junit.BeforeClass;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
 import com.google.cloud.bigtable.hbase.BigtableConfiguration;
+import com.stumbleupon.async.Callback;
+import com.stumbleupon.async.Deferred;
 
 @RunWith(JUnit4.class)
 public class HBaseClientIT {
@@ -53,36 +57,90 @@ public class HBaseClientIT {
       TableName.valueOf("test_table-" + UUID.randomUUID().toString());
   private static byte[] FAMILY = Bytes.toBytes("cf");
   private static final DataGenerationHelper dataHelper = new DataGenerationHelper();
+  private static HBaseClient client;
 
   @BeforeClass
-  public static void createTable() throws IOException {
+  public static void createTable() throws Exception {
     String projectId = System.getProperty( "google.bigtable.project.id");
     String instanceId = System.getProperty( "google.bigtable.instance.id");
-    client = new HBaseClient(BigtableConfiguration.configure(projectId, instanceId),
+    
+    Configuration config = BigtableConfiguration.configure(projectId, instanceId);
+    
+    client = new HBaseClient(config,
         Executors.newCachedThreadPool());
-    Admin admin = client.getBigtableConnection().getAdmin();
-    try {
-      admin.createTable(
-        new HTableDescriptor(TABLE_NAME)
-          .addFamily(new HColumnDescriptor(FAMILY)));
-    } finally {
-      admin.close();
-    }
+    AsyncAdmin admin = client.getBigtableConnection().getAdmin();
+    admin.createTable(new HTableDescriptor(TABLE_NAME).addFamily(new HColumnDescriptor(FAMILY)))
+        .get();
+    
+    client.setMutatorflushInterval((short)100);
   }
 
   @AfterClass
-  public static void deleteTable() throws IOException {
-    Admin admin = client.getBigtableConnection().getAdmin();
-    try {
-      admin.deleteTable(TABLE_NAME);
-    } finally {
-      admin.close();
-    }
+  public static void deleteTable() throws Exception {
+    AsyncAdmin admin = client.getBigtableConnection().getAdmin();
+    admin.deleteTable(TABLE_NAME).get();
+  }
+  
+  //will be fixed in next version of bigtable-hbase-2.x
+  @Test(expected=UnsupportedOperationException.class) 
+  public void testEnsureTableFamilyExists() throws Exception {
+    client.ensureTableFamilyExists(TABLE_NAME.toBytes(), FAMILY).join();
+    Assert.assertTrue(true);
   }
 
-  private static HBaseClient client;
+  //will be fixed in next version of bigtable-hbase-2.x
+  @Test(expected=UnsupportedOperationException.class) 
+  //@Test(expected=NoSuchColumnFamilyException.class)
+  public void testEnsureTableFamilyExists_nocf() throws Exception {
+    client.ensureTableFamilyExists(TABLE_NAME.toBytes(), Bytes.toBytes("nonExistingCF")).join();
+  }
+  
+  //will be fixed in next version of bigtable-hbase-2.x
+  @Test(expected=UnsupportedOperationException.class) 
+  //@Test(expected=TableNotFoundException.class)
+  public void testEnsureTableFamilyExists_noTable() throws Exception {
+    client.ensureTableFamilyExists("nonExistingTable".getBytes(), Bytes.toBytes("nonexistingCF")).join();
+  }
 
+  @Test
+  public void atomicIncrement() throws Exception {
+    byte[] rowKey = dataHelper.randomData("putKey-");
+    byte[] qualifier = Bytes.toBytes("qual");
+    byte[] value = Longs.toByteArray(5);
 
+    client.put(new PutRequest(TABLE_NAME.getName(), rowKey, FAMILY, qualifier, value)).join();
+
+    AtomicIncrementRequest req = new AtomicIncrementRequest(TABLE_NAME.toBytes(), rowKey, FAMILY, qualifier, 2);
+    Assert.assertEquals((Long)7L, client.atomicIncrement(req).join());
+    assertGetEquals(rowKey, qualifier, Longs.toByteArray(7));    
+  }
+    
+  @Test
+  public void atomicIncrement_nonexisting() throws Exception {
+    byte[] rowKey = dataHelper.randomData("putKey-");
+    byte[] qualifier = Bytes.toBytes("qual");
+
+    AtomicIncrementRequest req = new AtomicIncrementRequest(TABLE_NAME.toBytes(), rowKey, FAMILY, qualifier, 1);
+    Assert.assertEquals((Long)1L, client.atomicIncrement(req).join());
+    assertGetEquals(rowKey, qualifier, Longs.toByteArray(1));    
+  }
+
+  @Test
+  public void compareAndSet() throws Exception {
+    byte[] rowKey = dataHelper.randomData("putKey-");
+    byte[] qualifier = Bytes.toBytes("qual");
+    byte[] value = Longs.toByteArray(1);
+
+    //add new when empty
+    PutRequest putRequest = new PutRequest(TABLE_NAME.toBytes(), rowKey, FAMILY, qualifier, value);
+    Assert.assertTrue(client.compareAndSet(putRequest, new byte[0]).join());
+    assertGetEquals(rowKey, qualifier, Longs.toByteArray(1));
+    
+    putRequest = new PutRequest(TABLE_NAME.toBytes(), rowKey, FAMILY, qualifier, Longs.toByteArray(9));
+    Assert.assertTrue(client.compareAndSet(putRequest, value).join());
+    assertGetEquals(rowKey, qualifier, Longs.toByteArray(9));
+  }
+  
   /**
    * Really basic test to make sure that put, get and delete work.
    */
@@ -93,8 +151,7 @@ public class HBaseClientIT {
     byte[] value = dataHelper.randomData("value-");
 
     // Write the value, and make sure it's written
-    client.put(new PutRequest(TABLE_NAME.getName(), rowKey, FAMILY, qualifier, value));
-    client.flush().join();
+    client.put(new PutRequest(TABLE_NAME.getName(), rowKey, FAMILY, qualifier, value)).join();
 
     // Make sure that the value is as expected
     assertGetEquals(rowKey, qualifier, value);
@@ -107,16 +164,16 @@ public class HBaseClientIT {
   }
 
   @Test
-  public void testAppend() throws Exception {
+  public void testAppendAndScan() throws Exception {
     byte[] rowKey = dataHelper.randomData("appendKey-");
+    byte[] rowKey2 = dataHelper.randomData("appendKey2-");
     byte[] qualifier = dataHelper.randomData("qualifier-");
     byte[] value1 = dataHelper.randomData("value1-");
     byte[] value2 = dataHelper.randomData("value1-");
     byte[] value1And2 = ArrayUtils.addAll(value1, value2);
 
     // Write the value, and make sure it's written
-    client.put(new PutRequest(TABLE_NAME.getName(), rowKey, FAMILY, qualifier, value1));
-    client.flush().join();
+    client.put(new PutRequest(TABLE_NAME.getName(), rowKey, FAMILY, qualifier, value1)).join();
 
     client
         .append(
@@ -126,6 +183,14 @@ public class HBaseClientIT {
     ArrayList<KeyValue> response = get(rowKey);
     Assert.assertEquals(1, response.size());
     Assert.assertTrue(Bytes.equals(value1And2, response.get(0).value()));
+    
+    
+    client.put(new PutRequest(TABLE_NAME.getName(), rowKey2, FAMILY, qualifier, value1)).join();
+    Scanner scanner = new Scanner(client, TABLE_NAME.toBytes());
+    client.openScanner(scanner);
+    
+    ArrayList<ArrayList<KeyValue>> nextRows = scanner.nextRows(2).join();
+    Assert.assertEquals(2, nextRows.size());
   }
 
   private void assertGetEquals(byte[] key, byte[] qual, byte[] val)
@@ -141,5 +206,42 @@ public class HBaseClientIT {
 
   private ArrayList<KeyValue> get(byte[] key) throws Exception {
     return client.get(new GetRequest(TABLE_NAME.getName(), key)).join();
+  }
+  
+  @Test
+  public void testConvertToDeferred() throws Exception {
+    CompletableFuture<Integer> f = CompletableFuture.supplyAsync(() -> {
+      return 100;
+    });
+
+    Deferred<Integer> deferred = HBaseClient.convertToDeferred(f)
+        .addCallback(new Callback<Integer, Integer>() {
+
+          @Override
+          public Integer call(Integer arg) throws Exception {
+            return 2 * arg;
+          }
+        });
+
+    Assert.assertEquals((Integer) (100 * 2), deferred.join());
+  }        
+  
+  @Test
+  public void testConvertVoidToDeferred() throws Exception {
+    CompletableFuture<Void> f = CompletableFuture.runAsync(() -> {
+      //
+    });
+
+    HBaseClient.convertToDeferred(f).join();
+    Assert.assertTrue(true);
+  }        
+
+  @Test (expected=Exception.class)
+  public void testConvertToDeferred_exception() throws Exception {
+    CompletableFuture<Integer> f = CompletableFuture.supplyAsync(() -> {
+      throw new RuntimeException();
+    });
+  
+  HBaseClient.convertToDeferred(f).join();
   }
 }
