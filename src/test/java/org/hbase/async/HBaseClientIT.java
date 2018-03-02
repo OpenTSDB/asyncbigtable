@@ -183,7 +183,8 @@ public class HBaseClientIT {
     Assert.assertTrue(Bytes.equals(value1And2, response.get(0).value()));
     
     
-    client.put(new PutRequest(TABLE_NAME.getName(), rowKey2, FAMILY, qualifier, value1)).join();
+    client.put(new PutRequest(TABLE_NAME.getName(), rowKey2, FAMILY, qualifier, value1));
+    client.flush().join();
     Scanner scanner = new Scanner(client, TABLE_NAME.toBytes());
     client.openScanner(scanner);
     
