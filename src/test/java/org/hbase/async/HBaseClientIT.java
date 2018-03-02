@@ -35,11 +35,11 @@ import org.apache.hadoop.hbase.HColumnDescriptor;
 import org.apache.hadoop.hbase.HTableDescriptor;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.Admin;
+import org.apache.hadoop.hbase.shaded.com.google.common.primitives.Longs;
 import org.apache.hadoop.hbase.shaded.org.junit.AfterClass;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.junit.Assert;
 import org.junit.BeforeClass;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -53,6 +53,7 @@ public class HBaseClientIT {
       TableName.valueOf("test_table-" + UUID.randomUUID().toString());
   private static byte[] FAMILY = Bytes.toBytes("cf");
   private static final DataGenerationHelper dataHelper = new DataGenerationHelper();
+  private static HBaseClient client;
 
   @BeforeClass
   public static void createTable() throws IOException {
@@ -80,9 +81,61 @@ public class HBaseClientIT {
     }
   }
 
-  private static HBaseClient client;
+  public void testEnsureTableFamilyExists() throws Exception {
+    client.ensureTableFamilyExists(TABLE_NAME.toBytes(), FAMILY).join();
+    Assert.assertTrue(true);
+  }
 
+  @Test(expected=NoSuchColumnFamilyException.class)
+  public void testEnsureTableFamilyExists_nocf() throws Exception {
+    client.ensureTableFamilyExists(TABLE_NAME.toBytes(), Bytes.toBytes("nonExistingCF")).join();
+  }
+  
+  @Test(expected=TableNotFoundException.class)
+  public void testEnsureTableFamilyExists_noTable() throws Exception {
+    client.ensureTableFamilyExists("nonExistingTable".getBytes(), Bytes.toBytes("nonexistingCF")).join();
+  }
 
+  @Test
+  public void atomicIncrement() throws Exception {
+    byte[] rowKey = dataHelper.randomData("putKey-");
+    byte[] qualifier = Bytes.toBytes("qual");
+    byte[] value = Longs.toByteArray(5);
+
+    client.put(new PutRequest(TABLE_NAME.getName(), rowKey, FAMILY, qualifier, value)).join();
+    client.flush().join();
+
+    AtomicIncrementRequest req = new AtomicIncrementRequest(TABLE_NAME.toBytes(), rowKey, FAMILY, qualifier, 2);
+    Assert.assertEquals((Long)7L, client.atomicIncrement(req).join());
+    assertGetEquals(rowKey, qualifier, Longs.toByteArray(7));    
+  }
+    
+  @Test
+  public void atomicIncrement_nonexisting() throws Exception {
+    byte[] rowKey = dataHelper.randomData("putKey-");
+    byte[] qualifier = Bytes.toBytes("qual");
+
+    AtomicIncrementRequest req = new AtomicIncrementRequest(TABLE_NAME.toBytes(), rowKey, FAMILY, qualifier, 1);
+    Assert.assertEquals((Long)1L, client.atomicIncrement(req).join());
+    assertGetEquals(rowKey, qualifier, Longs.toByteArray(1));    
+  }
+
+  @Test
+  public void compareAndSet() throws Exception {
+    byte[] rowKey = dataHelper.randomData("putKey-");
+    byte[] qualifier = Bytes.toBytes("qual");
+    byte[] value = Longs.toByteArray(1);
+
+    //add new when empty
+    PutRequest putRequest = new PutRequest(TABLE_NAME.toBytes(), rowKey, FAMILY, qualifier, value);
+    Assert.assertTrue(client.compareAndSet(putRequest, new byte[0]).join());
+    assertGetEquals(rowKey, qualifier, Longs.toByteArray(1));
+    
+    putRequest = new PutRequest(TABLE_NAME.toBytes(), rowKey, FAMILY, qualifier, Longs.toByteArray(9));
+    Assert.assertTrue(client.compareAndSet(putRequest, value).join());
+    assertGetEquals(rowKey, qualifier, Longs.toByteArray(9));
+  }
+  
   /**
    * Really basic test to make sure that put, get and delete work.
    */
@@ -93,7 +146,7 @@ public class HBaseClientIT {
     byte[] value = dataHelper.randomData("value-");
 
     // Write the value, and make sure it's written
-    client.put(new PutRequest(TABLE_NAME.getName(), rowKey, FAMILY, qualifier, value));
+    client.put(new PutRequest(TABLE_NAME.getName(), rowKey, FAMILY, qualifier, value)).join();
     client.flush().join();
 
     // Make sure that the value is as expected
@@ -107,15 +160,16 @@ public class HBaseClientIT {
   }
 
   @Test
-  public void testAppend() throws Exception {
+  public void testAppendAndScan() throws Exception {
     byte[] rowKey = dataHelper.randomData("appendKey-");
+    byte[] rowKey2 = dataHelper.randomData("appendKey2-");
     byte[] qualifier = dataHelper.randomData("qualifier-");
     byte[] value1 = dataHelper.randomData("value1-");
     byte[] value2 = dataHelper.randomData("value1-");
     byte[] value1And2 = ArrayUtils.addAll(value1, value2);
 
     // Write the value, and make sure it's written
-    client.put(new PutRequest(TABLE_NAME.getName(), rowKey, FAMILY, qualifier, value1));
+    client.put(new PutRequest(TABLE_NAME.getName(), rowKey, FAMILY, qualifier, value1)).join();
     client.flush().join();
 
     client
@@ -126,6 +180,14 @@ public class HBaseClientIT {
     ArrayList<KeyValue> response = get(rowKey);
     Assert.assertEquals(1, response.size());
     Assert.assertTrue(Bytes.equals(value1And2, response.get(0).value()));
+    
+    
+    client.put(new PutRequest(TABLE_NAME.getName(), rowKey2, FAMILY, qualifier, value1)).join();
+    Scanner scanner = new Scanner(client, TABLE_NAME.toBytes());
+    client.openScanner(scanner);
+    
+    ArrayList<ArrayList<KeyValue>> nextRows = scanner.nextRows(2).join();
+    Assert.assertEquals(2, nextRows.size());
   }
 
   private void assertGetEquals(byte[] key, byte[] qual, byte[] val)
