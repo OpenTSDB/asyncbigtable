@@ -81,6 +81,7 @@ public class HBaseClientIT {
     }
   }
 
+  @Test
   public void testEnsureTableFamilyExists() throws Exception {
     client.ensureTableFamilyExists(TABLE_NAME.toBytes(), FAMILY).join();
     Assert.assertTrue(true);
@@ -102,7 +103,7 @@ public class HBaseClientIT {
     byte[] qualifier = Bytes.toBytes("qual");
     byte[] value = Longs.toByteArray(5);
 
-    client.put(new PutRequest(TABLE_NAME.getName(), rowKey, FAMILY, qualifier, value)).join();
+    client.put(new PutRequest(TABLE_NAME.getName(), rowKey, FAMILY, qualifier, value));
     client.flush().join();
 
     AtomicIncrementRequest req = new AtomicIncrementRequest(TABLE_NAME.toBytes(), rowKey, FAMILY, qualifier, 2);
@@ -146,7 +147,7 @@ public class HBaseClientIT {
     byte[] value = dataHelper.randomData("value-");
 
     // Write the value, and make sure it's written
-    client.put(new PutRequest(TABLE_NAME.getName(), rowKey, FAMILY, qualifier, value)).join();
+    client.put(new PutRequest(TABLE_NAME.getName(), rowKey, FAMILY, qualifier, value));
     client.flush().join();
 
     // Make sure that the value is as expected
@@ -169,7 +170,7 @@ public class HBaseClientIT {
     byte[] value1And2 = ArrayUtils.addAll(value1, value2);
 
     // Write the value, and make sure it's written
-    client.put(new PutRequest(TABLE_NAME.getName(), rowKey, FAMILY, qualifier, value1)).join();
+    client.put(new PutRequest(TABLE_NAME.getName(), rowKey, FAMILY, qualifier, value1));
     client.flush().join();
 
     client
