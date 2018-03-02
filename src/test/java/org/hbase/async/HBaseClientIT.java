@@ -45,6 +45,7 @@ import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
 import com.google.cloud.bigtable.hbase.BigtableConfiguration;
+import com.stumbleupon.async.Deferred;
 
 @RunWith(JUnit4.class)
 public class HBaseClientIT {
@@ -103,8 +104,9 @@ public class HBaseClientIT {
     byte[] qualifier = Bytes.toBytes("qual");
     byte[] value = Longs.toByteArray(5);
 
-    client.put(new PutRequest(TABLE_NAME.getName(), rowKey, FAMILY, qualifier, value));
+    Deferred<Object> deferredPut = client.put(new PutRequest(TABLE_NAME.getName(), rowKey, FAMILY, qualifier, value));
     client.flush().join();
+    deferredPut.join();
 
     AtomicIncrementRequest req = new AtomicIncrementRequest(TABLE_NAME.toBytes(), rowKey, FAMILY, qualifier, 2);
     Assert.assertEquals((Long)7L, client.atomicIncrement(req).join());
@@ -147,8 +149,9 @@ public class HBaseClientIT {
     byte[] value = dataHelper.randomData("value-");
 
     // Write the value, and make sure it's written
-    client.put(new PutRequest(TABLE_NAME.getName(), rowKey, FAMILY, qualifier, value));
+    Deferred<Object> deferredPut = client.put(new PutRequest(TABLE_NAME.getName(), rowKey, FAMILY, qualifier, value));
     client.flush().join();
+    deferredPut.join();
 
     // Make sure that the value is as expected
     assertGetEquals(rowKey, qualifier, value);
@@ -170,8 +173,9 @@ public class HBaseClientIT {
     byte[] value1And2 = ArrayUtils.addAll(value1, value2);
 
     // Write the value, and make sure it's written
-    client.put(new PutRequest(TABLE_NAME.getName(), rowKey, FAMILY, qualifier, value1));
+    Deferred<Object> deferredPut = client.put(new PutRequest(TABLE_NAME.getName(), rowKey, FAMILY, qualifier, value1));
     client.flush().join();
+    deferredPut.join();
 
     client
         .append(
@@ -183,8 +187,10 @@ public class HBaseClientIT {
     Assert.assertTrue(Bytes.equals(value1And2, response.get(0).value()));
     
     
-    client.put(new PutRequest(TABLE_NAME.getName(), rowKey2, FAMILY, qualifier, value1));
+    deferredPut = client.put(new PutRequest(TABLE_NAME.getName(), rowKey2, FAMILY, qualifier, value1));
     client.flush().join();
+    deferredPut.join();
+    
     Scanner scanner = new Scanner(client, TABLE_NAME.toBytes());
     client.openScanner(scanner);
     
