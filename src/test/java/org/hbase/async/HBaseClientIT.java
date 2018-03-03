@@ -28,6 +28,7 @@
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 
 import org.apache.commons.lang.ArrayUtils;
@@ -45,6 +46,7 @@ import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
 import com.google.cloud.bigtable.hbase.BigtableConfiguration;
+import com.stumbleupon.async.Callback;
 import com.stumbleupon.async.Deferred;
 
 @RunWith(JUnit4.class)
@@ -211,5 +213,42 @@ public class HBaseClientIT {
 
   private ArrayList<KeyValue> get(byte[] key) throws Exception {
     return client.get(new GetRequest(TABLE_NAME.getName(), key)).join();
+  }
+  
+  @Test
+  public void testConvertToDeferred() throws Exception {
+    CompletableFuture<Integer> f = CompletableFuture.supplyAsync(() -> {
+      return 100;
+    });
+
+    Deferred<Integer> deferred = HBaseClient.convertToDeferred(f)
+        .addCallback(new Callback<Integer, Integer>() {
+
+          @Override
+          public Integer call(Integer arg) throws Exception {
+            return 2 * arg;
+          }
+        });
+
+    Assert.assertEquals((Integer) (100 * 2), deferred.join());
+  }
+
+  @Test
+  public void testConvertVoidToDeferred() throws Exception {
+    CompletableFuture<Void> f = CompletableFuture.runAsync(() -> {
+      //
+    });
+
+    HBaseClient.convertToDeferred(f).join();
+    Assert.assertTrue(true);
+  }
+
+  @Test(expected = Exception.class)
+  public void testConvertToDeferred_exception() throws Exception {
+    CompletableFuture<Integer> f = CompletableFuture.supplyAsync(() -> {
+      throw new RuntimeException();
+    });
+
+    HBaseClient.convertToDeferred(f).join();
   }
 }
