@@ -159,7 +159,9 @@ public class HBaseClientIT {
     assertGetEquals(rowKey, qualifier, value);
 
     // Delete the value
-    client.delete(new DeleteRequest(TABLE_NAME.getName(), rowKey)).join();
+    Deferred<Object> deferredDelete = client.delete(new DeleteRequest(TABLE_NAME.getName(), rowKey));
+    client.flush().join();
+    deferredDelete.join();
 
     // Make sure that the value is deleted
     Assert.assertEquals(0, get(rowKey).size());

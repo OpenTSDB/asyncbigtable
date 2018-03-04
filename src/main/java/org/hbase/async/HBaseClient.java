@@ -44,6 +44,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.hbase.CompareOperator;
 import org.apache.hadoop.hbase.HBaseConfiguration;
 import org.apache.hadoop.hbase.HColumnDescriptor;
 import org.apache.hadoop.hbase.TableName;
@@ -52,6 +53,7 @@ import org.apache.hadoop.hbase.client.Append;
 import org.apache.hadoop.hbase.client.AsyncBufferedMutator;
 import org.apache.hadoop.hbase.client.AsyncConnection;
 import org.apache.hadoop.hbase.client.AsyncTable;
+import org.apache.hadoop.hbase.client.AsyncTableBase.CheckAndMutateBuilder;
 import org.apache.hadoop.hbase.client.Connection;
 import org.apache.hadoop.hbase.client.ConnectionFactory;
 import org.apache.hadoop.hbase.client.Delete;
@@ -982,21 +984,16 @@ public final class HBaseClient {
     if (LOG.isDebugEnabled()) {
       LOG.debug("BigTable API: Scanning table with {}", scanner.toString());
     }
-    Table table = null;
+
     try {
-      table = hbase_connection.getTable(TableName.valueOf(scanner.table()));
+      AsyncTable table = hbase_asyncConnection.getTable(TableName.valueOf(scanner.table()),
+          executor);
       ResultScanner result = table.getScanner(scanner.getHbaseScan());
       scanner.setResultScanner(result);
       scanner.setHbaseTable(table);
 
       return Deferred.fromResult(new Object());
-    } catch (IOException e) {
-      if (table != null) {
-        try {
-          table.close();
-        } catch (Exception e1) {}
-      }
-
+    } catch (Exception e) {
       return Deferred.fromError(e);
     }
   }
@@ -1022,17 +1019,7 @@ public final class HBaseClient {
       return Deferred.fromError(e);
     } finally {
       scanner.setResultScanner(null);
-      try {
-        if (scanner.getHbaseTable() != null) {
-          scanner.getHbaseTable().close();
-        } else {
-          LOG.warn("Cannot close " + scanner + " properly, no table open");
-        }
-      } catch (Exception e) {
-        return Deferred.fromError(e);
-      } finally {
-        scanner.setHbaseTable(null);
-      }
+      scanner.setHbaseTable(null);
     }
   }
 
@@ -1048,21 +1035,10 @@ public final class HBaseClient {
   public Deferred<Long> atomicIncrement(final AtomicIncrementRequest request) {
     num_atomic_increments.increment();
 
-    Table table = null;
-    try {
-      table = hbase_connection.getTable(TableName.valueOf(request.table()));
-      long val = table.incrementColumnValue(request.key(),
-              request.family(), request.qualifier(),
-              request.getAmount(),
-              request.isDurable() ? Durability.USE_DEFAULT : Durability.SKIP_WAL);
-
-      LOG.info("BigTable API: AtomicIncrement for {} returned {}", request, val);
-      return Deferred.fromResult(val);
-    } catch (IOException e) {
-      return Deferred.fromError(e);
-    } finally {
-      close(table);
-    }
+    AsyncTable table = hbase_asyncConnection.getTable(TableName.valueOf(request.table()), executor);
+    return convertToDeferred(table.incrementColumnValue(request.key(), request.family(),
+        request.qualifier(), request.getAmount(),
+        request.isDurable() ? Durability.USE_DEFAULT : Durability.SKIP_WAL));
   }
 
   /**
@@ -1306,46 +1282,25 @@ public final class HBaseClient {
    */
   public Deferred<Boolean> compareAndSet(final PutRequest edit,
                                          final byte[] expected) {
-    long ts1 = System.currentTimeMillis();
-
-    Table table = null;
-    try {
-      table = hbase_connection.getTable(TableName.valueOf(edit.table()));
-
-      Put put = new Put(edit.key());
-      long ts = edit.timestamp();
-      for (int i = 0; i < edit.qualifiers().length; i++) {
-        put.addColumn(edit.family, edit.qualifiers()[i], ts, edit.values()[i]);
-      }
-
-      boolean success = table.checkAndPut(edit.key(), edit.family(), edit.qualifier(),
-              Bytes.memcmp(EMPTY_ARRAY, expected) == 0 ? null : expected,
-              put);
-
-      long ts2 = System.currentTimeMillis();
-
-      if (LOG.isDebugEnabled()) {
-        LOG.debug("BigTable API compareAndSet for cell: [{}], expected: [{}] "
-            + "returned success: {} in {}ms", edit,Bytes.pretty(expected), 
-            success, ts2 - ts1);
-      }
-
-      return Deferred.fromResult(success);
-    } catch (IOException e) {
-      return Deferred.fromError(e);
-    } finally {
-      close(table);
+    
+    AsyncTable table = hbase_asyncConnection.getTable(TableName.valueOf(edit.table()), executor);
+    Put put = new Put(edit.key());
+    long ts = edit.timestamp();
+    for (int i = 0; i < edit.qualifiers().length; i++) {
+      put.addColumn(edit.family, edit.qualifiers()[i], ts, edit.values()[i]);
     }
-  }
 
-  private void close(Table table) {
-    if (table != null) {
-      try {
-        table.close();
-      } catch (IOException e) {
-        LOG.error("Failed to close table {}", table, e);
-      }
+    CheckAndMutateBuilder builder = table.checkAndMutate(edit.key(), edit.family())
+        .qualifier(edit.qualifier());
+
+    byte[] expect = expected;
+    if (Bytes.memcmp(EMPTY_ARRAY, expected) == 0) {
+      builder.ifNotExists();
+    } else {
+      builder.ifMatches(CompareOperator.EQUAL, expect);
     }
+
+    return convertToDeferred(builder.thenPut(put));
   }
 
   /**
@@ -1394,39 +1349,26 @@ public final class HBaseClient {
   public Deferred<Object> delete(final DeleteRequest request) {
     num_deletes.increment();
 
-    Table table = null;
-    try {
-      table = hbase_connection.getTable(TableName.valueOf(request.table()));
-      Delete delete = new Delete(request.key());
-      long ts = request.timestamp();
-
-      if (request.family() != null) {
-        if (request.qualifiers() != null && request.qualifiers().length > 0) {
-          for (int i = 0; i < request.qualifiers().length; i++) {
-            if (request.deleteAtTimestampOnly()) {
-              delete.addColumn(request.family, request.qualifiers()[i], ts);
-            } else {
-              delete.addColumns(request.family, request.qualifiers()[i], ts);
-            }
+    Delete delete = new Delete(request.key());
+    long ts = request.timestamp();
+    if (request.family() != null) {
+      if (request.qualifiers() != null && request.qualifiers().length > 0) {
+        for (int i = 0; i < request.qualifiers().length; i++) {
+          if (request.deleteAtTimestampOnly()) {
+            delete.addColumn(request.family, request.qualifiers()[i], ts);
+          } else {
+            delete.addColumns(request.family, request.qualifiers()[i], ts);
           }
-        } else {
-          delete.addFamily(request.family, ts);
         }
-      }
-      table.delete(delete);
-
-      return Deferred.fromResult(null);
-    } catch (IOException e) {
-      return Deferred.fromError(e);
-    } finally {
-      if (table != null) {
-        try {
-          table.close();
-        } catch (IOException e) {
-          return Deferred.fromError(e);
-        }
+      } else {
+        delete.addFamily(request.family, ts);
       }
     }
+
+    @SuppressWarnings("unchecked")
+    Deferred<Object> deferedDelete = (Deferred) sendMutation(delete,
+        TableName.valueOf(request.table()));
+    return deferedDelete;
   }
 
   /**
