@@ -26,22 +26,27 @@
  */
 package org.hbase.async;
 
-import static org.hbase.async.HBaseClient.EMPTY_ARRAY;
+import com.stumbleupon.async.Callback;
+import com.stumbleupon.async.Deferred;
+
+import org.apache.hadoop.hbase.client.Result;
+import org.apache.hadoop.hbase.client.ResultScanner;
+import org.apache.hadoop.hbase.client.Scan;
+import org.apache.hadoop.hbase.client.Table;
+import org.apache.hadoop.hbase.filter.ByteArrayComparable;
+import org.apache.hadoop.hbase.filter.CompareFilter;
+import org.apache.hadoop.hbase.filter.RegexStringComparator;
+import org.apache.hadoop.hbase.filter.RowFilter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.NavigableMap;
 
-import org.apache.hadoop.hbase.client.AsyncTable;
-import org.apache.hadoop.hbase.client.Result;
-import org.apache.hadoop.hbase.client.ResultScanner;
-import org.apache.hadoop.hbase.client.Scan;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import com.stumbleupon.async.Callback;
-import com.stumbleupon.async.Deferred;
+import static org.hbase.async.HBaseClient.EMPTY_ARRAY;
 
 /**
  * Creates a scanner to read data sequentially from BigTable.
@@ -91,7 +96,7 @@ public final class Scanner {
   private ResultScanner result_scanner;
 
   /** The HBase table object we're working on */
-  private AsyncTable hbase_client_table;
+  private Table hbase_client_table;
 
   /**
    * The default maximum number of {@link KeyValue}s the server is allowed
@@ -712,12 +717,12 @@ public final class Scanner {
   }
 
   /** @return the HTable client */
-  AsyncTable getHbaseTable() {
+  Table getHbaseTable() {
     return hbase_client_table;
   }
 
   /** @param table The HTable client object */
-  public void setHbaseTable(final AsyncTable table) {
+  public void setHbaseTable(final Table table) {
     this.hbase_client_table = table;
   }
 
