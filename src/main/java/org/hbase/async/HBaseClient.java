@@ -989,7 +989,6 @@ public final class HBaseClient {
     AsyncTable table = hbase_asyncConnection.getTable(TableName.valueOf(scanner.table()), executor);
     ResultScanner result = table.getScanner(scanner.getHbaseScan());
     scanner.setResultScanner(result);
-    scanner.setHbaseTable(table);
     return Deferred.fromResult(new Object());
   }
 
@@ -1014,7 +1013,6 @@ public final class HBaseClient {
       return Deferred.fromError(e);
     } finally {
       scanner.setResultScanner(null);
-      scanner.setHbaseTable(null);
     }
   }
 
