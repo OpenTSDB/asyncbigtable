@@ -985,23 +985,12 @@ public final class HBaseClient {
     if (LOG.isDebugEnabled()) {
       LOG.debug("BigTable API: Scanning table with {}", scanner.toString());
     }
-    Table table = null;
-    try {
-      table = hbase_connection.getTable(TableName.valueOf(scanner.table()));
-      ResultScanner result = table.getScanner(scanner.getHbaseScan());
-      scanner.setResultScanner(result);
-      scanner.setHbaseTable(table);
 
-      return Deferred.fromResult(new Object());
-    } catch (IOException e) {
-      if (table != null) {
-        try {
-          table.close();
-        } catch (Exception e1) {}
-      }
-
-      return Deferred.fromError(e);
-    }
+    AsyncTable table = hbase_asyncConnection.getTable(TableName.valueOf(scanner.table()), executor);
+    ResultScanner result = table.getScanner(scanner.getHbaseScan());
+    scanner.setResultScanner(result);
+    scanner.setHbaseTable(table);
+    return Deferred.fromResult(new Object());
   }
 
   /**
@@ -1025,17 +1014,7 @@ public final class HBaseClient {
       return Deferred.fromError(e);
     } finally {
       scanner.setResultScanner(null);
-      try {
-        if (scanner.getHbaseTable() != null) {
-          scanner.getHbaseTable().close();
-        } else {
-          LOG.warn("Cannot close " + scanner + " properly, no table open");
-        }
-      } catch (Exception e) {
-        return Deferred.fromError(e);
-      } finally {
-        scanner.setHbaseTable(null);
-      }
+      scanner.setHbaseTable(null);
     }
   }
 
@@ -1258,16 +1237,17 @@ public final class HBaseClient {
    * at least an errback to this {@code Deferred} to handle failures.
    */
   public Deferred<Object> append(final AppendRequest request) {
-   num_appends.increment();
-    
-      final Append append = new Append(request.key);
-      for (int i = 0; i < request.qualifiers().length; i++) {
-        append.add(request.family, request.qualifiers()[i], request.values()[i]);
-      }
+    num_appends.increment();
 
-     AsyncTable table = hbase_asyncConnection.getTable(TableName.valueOf(request.table()), executor);
-      Deferred<Result> convertToDeferred = convertToDeferred(table.append(append));
-      return (Deferred) convertToDeferred;
+    final Append append = new Append(request.key);
+    for (int i = 0; i < request.qualifiers().length; i++) {
+      append.add(request.family, request.qualifiers()[i], request.values()[i]);
+    }
+
+    @SuppressWarnings("unchecked")
+    Deferred<Object> deferedAppend = (Deferred) sendMutation(append,
+        TableName.valueOf(request.table()));
+    return deferedAppend;
   }
     
   /**

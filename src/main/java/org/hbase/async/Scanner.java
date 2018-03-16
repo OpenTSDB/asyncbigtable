@@ -29,6 +29,7 @@ package org.hbase.async;
 import com.stumbleupon.async.Callback;
 import com.stumbleupon.async.Deferred;
 
+import org.apache.hadoop.hbase.client.AsyncTable;
 import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.client.ResultScanner;
 import org.apache.hadoop.hbase.client.Scan;
@@ -96,7 +97,7 @@ public final class Scanner {
   private ResultScanner result_scanner;
 
   /** The HBase table object we're working on */
-  private Table hbase_client_table;
+  private AsyncTable hbase_client_table;
 
   /**
    * The default maximum number of {@link KeyValue}s the server is allowed
@@ -717,12 +718,12 @@ public final class Scanner {
   }
 
   /** @return the HTable client */
-  Table getHbaseTable() {
+  AsyncTable getHbaseTable() {
     return hbase_client_table;
   }
 
   /** @param table The HTable client object */
-  public void setHbaseTable(final Table table) {
+  public void setHbaseTable(final AsyncTable table) {
     this.hbase_client_table = table;
   }
 
