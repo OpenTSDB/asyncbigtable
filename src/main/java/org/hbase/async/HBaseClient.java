@@ -46,15 +46,13 @@ import java.util.concurrent.Executors;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.CompareOperator;
 import org.apache.hadoop.hbase.HBaseConfiguration;
-import org.apache.hadoop.hbase.HColumnDescriptor;
 import org.apache.hadoop.hbase.TableName;
-import org.apache.hadoop.hbase.client.Admin;
 import org.apache.hadoop.hbase.client.Append;
+import org.apache.hadoop.hbase.client.AsyncAdmin;
 import org.apache.hadoop.hbase.client.AsyncBufferedMutator;
 import org.apache.hadoop.hbase.client.AsyncConnection;
 import org.apache.hadoop.hbase.client.AsyncTable;
-import org.apache.hadoop.hbase.client.AsyncTableBase.CheckAndMutateBuilder;
-import org.apache.hadoop.hbase.client.Connection;
+import org.apache.hadoop.hbase.client.AsyncTable.CheckAndMutateBuilder;
 import org.apache.hadoop.hbase.client.ConnectionFactory;
 import org.apache.hadoop.hbase.client.Delete;
 import org.apache.hadoop.hbase.client.Durability;
@@ -62,9 +60,8 @@ import org.apache.hadoop.hbase.client.Get;
 import org.apache.hadoop.hbase.client.MultiAction;
 import org.apache.hadoop.hbase.client.Mutation;
 import org.apache.hadoop.hbase.client.Put;
-import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.client.ResultScanner;
-import org.apache.hadoop.hbase.client.Table;
+import org.apache.hadoop.hbase.client.ScanResultConsumer;
 import org.apache.hadoop.hbase.util.Threads;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -186,9 +183,6 @@ public final class HBaseClient {
   /** BigTable client configuration used by the standard BigTable drive */
   private final Configuration hbase_config;
 
-  /** BigTable client connection using the standard BigTable drive */
-  private final Connection hbase_connection;
-
   /** BigTable client async connection using the standard BigTable drive */
   private final AsyncConnection hbase_asyncConnection;
 
@@ -292,16 +286,10 @@ public final class HBaseClient {
 
   public HBaseClient(final Configuration configuration, final ExecutorService executor) {
     this.executor = executor;
-    hbase_config = configuration;
+    hbase_config = BigtableConfiguration.asyncConfigure(configuration);
     LOG.info("BigTable API: Connecting with config: {}", hbase_config);
-    hbase_connection = BigtableConfiguration.connect(hbase_config);
     
     try {
-      //these properties are required for creating a asyncConnection. 
-      //BigtableConfiguration will provide method to configure and create the connection in a later release
-      hbase_config.set("hbase.client.async.connection.impl", "org.apache.hadoop.hbase.client.BigtableAsyncConnection");
-      hbase_config.set("hbase.client.registry.impl", "org.apache.hadoop.hbase.client.BigtableAsyncRegistry");
-      
       hbase_asyncConnection = ConnectionFactory.createAsyncConnection(hbase_config).get();
     } catch (InterruptedException | ExecutionException e) {
       LOG.error("Failed to create BigtableAsyncConnection", e);
@@ -564,17 +552,6 @@ public final class HBaseClient {
         executor.shutdown();
     }
 
-    // Close BigTable connection
-    if (hbase_connection != null) {
-      try {
-        hbase_connection.close();
-        d.add(Deferred.fromResult(null));
-      } catch (IOException e) {
-        LOG.error("Error occurred while disconnecting from BigTable", e);
-        d.add(Deferred.fromError(e));
-      }
-    }
-
     // Close BigTable asyncConnection
     if (hbase_asyncConnection != null) {
       try {
@@ -629,57 +606,21 @@ public final class HBaseClient {
    * @throws TableNotFoundException (deferred) if the table doesn't exist.
    * @throws NoSuchColumnFamilyException (deferred) if the family doesn't exist.
    */
-  public Deferred<Object> ensureTableFamilyExists(final byte[] table,
-                                                  final byte[] family) {
+  public Deferred<Object> ensureTableFamilyExists(final byte[] table, final byte[] family) {
     if (LOG.isDebugEnabled()) {
-      LOG.debug("BigTable API: Checking if table [{}] and family [{}] exist",
-          Bytes.pretty(table), Bytes.pretty(family));
+      LOG.debug("BigTable API: Checking if table [{}] and family [{}] exist", Bytes.pretty(table),
+          Bytes.pretty(family));
     }
 
-    Admin admin = null;
-    try {
-      admin = hbase_connection.getAdmin();
-      if (!admin.tableExists(TableName.valueOf(table))) {
-        return Deferred.fromError(new TableNotFoundException(table));
+    AsyncAdmin admin = hbase_asyncConnection.getAdmin();
+    CompletableFuture<Boolean> cf = admin.getDescriptor(TableName.valueOf(table)).thenApply(res -> {
+      if (family == EMPTY_ARRAY || (res != null && res.getColumnFamily(family) != null)) {
+        return true;
       }
-    } catch (IOException e) {
-      if (admin != null) {
-        try {
-          admin.close();
-        } catch (Exception e1) {
-          LOG.error("Failed closing the admin connection", e1);
-        }
-      }
-      return Deferred.fromError(e);
-    }
+      throw new NoSuchColumnFamilyException(Bytes.pretty(family), null);
+    });
 
-    if (family != EMPTY_ARRAY) {
-      Table t = null;
-
-      try {
-        t = hbase_connection.getTable(TableName.valueOf(table));
-        HColumnDescriptor[] descriptors = t.getTableDescriptor()
-            .getColumnFamilies();
-        for (HColumnDescriptor descriptor : descriptors) {
-          if (Bytes.memcmp(descriptor.getName(), family) == 0) {
-            return Deferred.fromResult(null);
-          }
-        }
-        return Deferred.fromError(new NoSuchColumnFamilyException(
-            Bytes.pretty(family), null));
-      } catch (IOException e) {
-        return Deferred.fromError(e);
-      } finally {
-        try {
-          if (t != null) {
-            t.close();
-          }
-        } catch (Exception e) {
-          LOG.error("Failure closing connection", e);
-        }
-      }
-    }
-    return Deferred.fromResult(null);
+    return (Deferred) convertToDeferred(cf);
   }
 
   /**
@@ -727,7 +668,7 @@ public final class HBaseClient {
   public Deferred<ArrayList<KeyValue>> get(final GetRequest request) {
     num_gets.increment();
 
-    AsyncTable table = hbase_asyncConnection.getTable(TableName.valueOf(request.table()), executor);
+    AsyncTable<ScanResultConsumer> table = hbase_asyncConnection.getTable(TableName.valueOf(request.table()), executor);
     Get get = new Get(request.key());
     
     if (request.qualifiers() != null) {
@@ -986,7 +927,7 @@ public final class HBaseClient {
       LOG.debug("BigTable API: Scanning table with {}", scanner.toString());
     }
 
-    AsyncTable table = hbase_asyncConnection.getTable(TableName.valueOf(scanner.table()), executor);
+    AsyncTable<ScanResultConsumer> table = hbase_asyncConnection.getTable(TableName.valueOf(scanner.table()), executor);
     ResultScanner result = table.getScanner(scanner.getHbaseScan());
     scanner.setResultScanner(result);
     return Deferred.fromResult(new Object());
@@ -1028,7 +969,7 @@ public final class HBaseClient {
   public Deferred<Long> atomicIncrement(final AtomicIncrementRequest request) {
     num_atomic_increments.increment();
 
-    AsyncTable table = hbase_asyncConnection.getTable(TableName.valueOf(request.table()), executor);
+    AsyncTable<ScanResultConsumer> table = hbase_asyncConnection.getTable(TableName.valueOf(request.table()), executor);
     return convertToDeferred(table.incrementColumnValue(request.key(), request.family(),
         request.qualifier(), request.getAmount(),
         request.isDurable() ? Durability.USE_DEFAULT : Durability.SKIP_WAL));
@@ -1277,7 +1218,7 @@ public final class HBaseClient {
   public Deferred<Boolean> compareAndSet(final PutRequest edit,
                                          final byte[] expected) {
     
-    AsyncTable table = hbase_asyncConnection.getTable(TableName.valueOf(edit.table()), executor);
+    AsyncTable<ScanResultConsumer> table = hbase_asyncConnection.getTable(TableName.valueOf(edit.table()), executor);
     Put put = new Put(edit.key());
     long ts = edit.timestamp();
     for (int i = 0; i < edit.qualifiers().length; i++) {
@@ -1433,11 +1374,6 @@ public final class HBaseClient {
     return Deferred.fromResult(Collections.<RegionLocation>emptyList());
   }
   
-  /** @return The Bigtable connection via the HBase API. */
-  public Connection getBigtableConnection() {
-    return hbase_connection;
-  }
-
   public AsyncConnection getBigtableAsyncConnection() {
     return hbase_asyncConnection;
   }
