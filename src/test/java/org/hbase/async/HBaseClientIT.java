@@ -25,17 +25,18 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */package org.hbase.async;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import org.apache.commons.lang.ArrayUtils;
-import org.apache.hadoop.hbase.HColumnDescriptor;
-import org.apache.hadoop.hbase.HTableDescriptor;
 import org.apache.hadoop.hbase.TableName;
-import org.apache.hadoop.hbase.client.Admin;
+import org.apache.hadoop.hbase.TableNotFoundException;
+import org.apache.hadoop.hbase.client.AsyncAdmin;
+import org.apache.hadoop.hbase.client.ColumnFamilyDescriptorBuilder;
+import org.apache.hadoop.hbase.client.TableDescriptorBuilder;
 import org.apache.hadoop.hbase.shaded.com.google.common.primitives.Longs;
 import org.apache.hadoop.hbase.shaded.org.junit.AfterClass;
 import org.apache.hadoop.hbase.util.Bytes;
@@ -59,29 +60,22 @@ public class HBaseClientIT {
   private static HBaseClient client;
 
   @BeforeClass
-  public static void createTable() throws IOException {
-    String projectId = System.getProperty( "google.bigtable.project.id");
-    String instanceId = System.getProperty( "google.bigtable.instance.id");
+  public static void createTable() throws Exception {
+    String projectId = System.getProperty("google.bigtable.project.id");
+    String instanceId = System.getProperty("google.bigtable.instance.id");
     client = new HBaseClient(BigtableConfiguration.configure(projectId, instanceId),
         Executors.newCachedThreadPool());
-    Admin admin = client.getBigtableConnection().getAdmin();
-    try {
-      admin.createTable(
-        new HTableDescriptor(TABLE_NAME)
-          .addFamily(new HColumnDescriptor(FAMILY)));
-    } finally {
-      admin.close();
-    }
+    AsyncAdmin admin = client.getBigtableAsyncConnection().getAdmin();
+    admin
+        .createTable(TableDescriptorBuilder.newBuilder(TABLE_NAME)
+            .addColumnFamily(ColumnFamilyDescriptorBuilder.newBuilder(FAMILY).build()).build())
+        .get(10, TimeUnit.SECONDS);
   }
 
   @AfterClass
-  public static void deleteTable() throws IOException {
-    Admin admin = client.getBigtableConnection().getAdmin();
-    try {
-      admin.deleteTable(TABLE_NAME);
-    } finally {
-      admin.close();
-    }
+  public static void deleteTable() throws Exception {
+    AsyncAdmin admin = client.getBigtableAsyncConnection().getAdmin();
+    admin.deleteTable(TABLE_NAME).get(10, TimeUnit.SECONDS);
   }
 
   @Test
