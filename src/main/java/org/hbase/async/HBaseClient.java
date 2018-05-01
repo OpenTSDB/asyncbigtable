@@ -1452,13 +1452,14 @@ public final class HBaseClient {
     if (mutator == null) {
       AsyncBufferedMutator newMutator = hbase_asyncConnection.getBufferedMutator(table);
       // in the case of a race condition, use the first stored mutator and close the rest
-      if (mutators.putIfAbsent(table, newMutator) != null) {
+      if ((mutator = mutators.putIfAbsent(table, newMutator)) != null) {
         newMutator.close();
+      } else {
+        mutator = newMutator;
       }
-      mutator = mutators.get(table);
     }
 
-    return mutator;
+    return mutator; 
   }
 
   private Deferred<Void> sendMutation(final Mutation mutation, final TableName tableName) {
