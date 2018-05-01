@@ -1450,10 +1450,8 @@ public final class HBaseClient {
     AsyncBufferedMutator mutator = mutators.get(table);
 
     if (mutator == null) {
-      synchronized (mutators) {
-        mutator = hbase_asyncConnection.getBufferedMutator(table);
-        mutators.put(table, mutator);
-      }
+      mutators.putIfAbsent(table, hbase_asyncConnection.getBufferedMutator(table));
+      mutator = mutators.get(table);
     }
 
     return mutator;
