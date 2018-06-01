@@ -16,12 +16,18 @@ public class KeyOnlyFilter extends ScanFilter {
         this.lenAsVal = lenAsVal;
     }
 
+    Filter getBigtableFilter() {
+        return new org.apache.hadoop.hbase.filter.KeyOnlyFilter(lenAsVal);
+    }
+
     @Override
     byte[] name() {
         return NAME;
     }
 
-    Filter getBigtableFilter() {
-        return new org.apache.hadoop.hbase.filter.KeyOnlyFilter(lenAsVal);
+    @Override
+    public String toString() {
+        return this.getClass().getSimpleName() + " "
+                + "lenAsVal: " + (lenAsVal ? "true" : "false");
     }
 }

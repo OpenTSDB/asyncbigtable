@@ -16,12 +16,16 @@ public final class ColumnPrefixFilter extends ScanFilter {
         this.prefix = prefix;
     }
 
+    Filter getBigtableFilter() {
+        return new org.apache.hadoop.hbase.filter.ColumnPrefixFilter(prefix);
+    }
+
     @Override
     byte[] name() {
         return NAME;
     }
 
-    Filter getBigtableFilter() {
-        return new org.apache.hadoop.hbase.filter.ColumnPrefixFilter(prefix);
+    public String toString() {
+        return "ColumnPrefixFilter(" + Bytes.pretty(prefix) + ")";
     }
 }
