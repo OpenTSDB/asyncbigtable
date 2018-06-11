@@ -31,7 +31,7 @@ import org.apache.hadoop.hbase.filter.CompareFilter;
 import org.apache.hadoop.hbase.filter.Filter;
 import org.apache.hadoop.hbase.filter.RegexStringComparator;
 import org.apache.hadoop.hbase.filter.RowFilter;
-import io.netty.util.CharsetUtil;
+import org.apache.hbase.thirdparty.io.netty.util.CharsetUtil;
 
 import java.lang.reflect.Field;
 import java.nio.charset.Charset;

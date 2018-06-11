@@ -26,12 +26,9 @@
  */
 package org.hbase.async;
 
-import io.netty.buffer.ByteBuf;
-import io.netty.util.CharsetUtil;
 
-import java.lang.reflect.Field;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
+import org.apache.hbase.thirdparty.io.netty.util.CharsetUtil;
+
 import java.util.*;
 
 /**

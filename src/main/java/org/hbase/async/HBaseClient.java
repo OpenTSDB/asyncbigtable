@@ -63,6 +63,10 @@ import org.apache.hadoop.hbase.client.Put;
 import org.apache.hadoop.hbase.client.ResultScanner;
 import org.apache.hadoop.hbase.client.ScanResultConsumer;
 import org.apache.hadoop.hbase.util.Threads;
+import org.apache.hbase.thirdparty.io.netty.util.HashedWheelTimer;
+import org.apache.hbase.thirdparty.io.netty.util.Timeout;
+import org.apache.hbase.thirdparty.io.netty.util.Timer;
+import org.apache.hbase.thirdparty.io.netty.util.TimerTask;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -71,11 +75,6 @@ import com.google.common.cache.LoadingCache;
 import com.google.common.collect.Lists;
 import com.stumbleupon.async.Callback;
 import com.stumbleupon.async.Deferred;
-
-import io.netty.util.HashedWheelTimer;
-import io.netty.util.Timeout;
-import io.netty.util.Timer;
-import io.netty.util.TimerTask;
 
 /**
  * A shim between projects using AsyncBigTable (such as OpenTSDB) and Google's
@@ -99,7 +98,8 @@ public final class HBaseClient {
    * TODO(tsuna): Get it through the ctor to share it with others.
    * TODO(tsuna): Make the tick duration configurable?
    */
-  private final HashedWheelTimer timer = new HashedWheelTimer(Threads.newDaemonThreadFactory("Flush-Timer"), 20, MILLISECONDS);
+  private final HashedWheelTimer
+      timer = new HashedWheelTimer(Threads.newDaemonThreadFactory("Flush-Timer"), 20, MILLISECONDS);
 
   /** Up to how many milliseconds can we buffer an edit on the client side.  */
   private volatile short flush_interval = 1000;  // ms
@@ -135,7 +135,7 @@ public final class HBaseClient {
   // Client usage statistics. //
   // ------------------------ //
 
-  /** Number of connections created by {@link #newClient}.  */
+  /** Number of connections created by a constructor.  */
   private final Counter num_connections_created = new Counter();
 
   /** How many {@code -ROOT-} lookups were made.  */
@@ -286,6 +286,7 @@ public final class HBaseClient {
 
   public HBaseClient(final Configuration configuration, final ExecutorService executor) {
     this.executor = executor;
+    num_connections_created.increment();
     hbase_config = BigtableConfiguration.asyncConfigure(configuration);
     LOG.info("BigTable API: Connecting with config: {}", hbase_config);
     
@@ -917,8 +918,7 @@ public final class HBaseClient {
   /**
    * Package-private access point for {@link Scanner}s to open themselves.
    * @param scanner The scanner to open.
-   * @return A deferred scanner ID (long) if BigTable 0.94 and before, or a
-   * deferred {@link Scanner.Response} if BigTable 0.95 and up.
+   * deferred {@link Object}
    */
   Deferred<Object> openScanner(final Scanner scanner) {
     num_scanners_opened.increment();
