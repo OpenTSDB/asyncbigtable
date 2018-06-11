@@ -28,8 +28,6 @@ package org.hbase.async;
 
 import org.apache.hadoop.hbase.filter.Filter;
 
-import io.netty.buffer.ByteBuf;
-
 /**
  * Abstract base class for {@link org.hbase.async.Scanner} filters.
  * <p>

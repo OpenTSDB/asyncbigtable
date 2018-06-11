@@ -27,8 +27,7 @@
 package org.hbase.async;
 
 import org.apache.hadoop.hbase.filter.ByteArrayComparable;
-
-import io.netty.buffer.ByteBuf;
+import org.apache.hbase.thirdparty.io.netty.buffer.ByteBuf;
 
 /**
  * Abstract base class for {@link ScanFilter} comparators.
