@@ -225,10 +225,17 @@
       <version>1.7.7</version>
     </dependency>
 
+    <!-- OpenTSDB depends on guava 18.0 -->
+    <dependency>
+      <groupId>com.google.guava</groupId>
+      <artifactId>guava</artifactId>
+      <version>18.0</version>
+    </dependency>
+
     <dependency>
       <groupId>com.google.cloud.bigtable</groupId>
-      <artifactId>bigtable-hbase-2.x</artifactId>
-      <version>1.4.0</version>
+      <artifactId>bigtable-hbase-2.x-shaded</artifactId>
+      <version>1.6.0</version>
      </dependency>
 
     <!-- runtime dependencies -->
