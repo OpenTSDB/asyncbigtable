@@ -51,6 +51,16 @@
       <timezone>+2</timezone>
     </developer>
   </developers>
+    <developer>
+      <id>sduskis</id>
+      <name>Solomon Duskios</name>
+      <email>sduskis@google.com</email>
+      <roles>
+        <role>developer</role>
+      </roles>
+      <timezone>-5</timezone>
+    </developer>
+  </developers>
   <inceptionYear>2010</inceptionYear>
 
   <distributionManagement>
@@ -127,9 +137,6 @@
                 </goals>
               </execution>
             </executions>
-            <configuration>
-              <keyname>soulios@pythian.com</keyname>
-            </configuration>
           </plugin>
 
           <plugin>
