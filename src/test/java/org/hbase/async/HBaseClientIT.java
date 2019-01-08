@@ -37,9 +37,8 @@ import org.apache.hadoop.hbase.TableNotFoundException;
 import org.apache.hadoop.hbase.client.AsyncAdmin;
 import org.apache.hadoop.hbase.client.ColumnFamilyDescriptorBuilder;
 import org.apache.hadoop.hbase.client.TableDescriptorBuilder;
-import org.apache.hadoop.hbase.shaded.com.google.common.primitives.Longs;
-import org.apache.hadoop.hbase.shaded.org.junit.AfterClass;
 import org.apache.hadoop.hbase.util.Bytes;
+import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -88,7 +87,7 @@ public class HBaseClientIT {
   public void testEnsureTableFamilyExists_nocf() throws Exception {
     client.ensureTableFamilyExists(TABLE_NAME.toBytes(), Bytes.toBytes("nonExistingCF")).join();
   }
-  
+
   @Test(expected=TableNotFoundException.class)
   public void testEnsureTableFamilyExists_noTable() throws Exception {
     client.ensureTableFamilyExists("nonExistingTable".getBytes(), Bytes.toBytes("nonexistingCF")).join();
@@ -98,7 +97,7 @@ public class HBaseClientIT {
   public void atomicIncrement() throws Exception {
     byte[] rowKey = dataHelper.randomData("putKey-");
     byte[] qualifier = Bytes.toBytes("qual");
-    byte[] value = Longs.toByteArray(5);
+    byte[] value = Bytes.toBytes(5l);
 
     Deferred<Object> deferredPut = client.put(new PutRequest(TABLE_NAME.getName(), rowKey, FAMILY, qualifier, value));
     client.flush().join();
@@ -106,9 +105,9 @@ public class HBaseClientIT {
 
     AtomicIncrementRequest req = new AtomicIncrementRequest(TABLE_NAME.toBytes(), rowKey, FAMILY, qualifier, 2);
     Assert.assertEquals((Long)7L, client.atomicIncrement(req).join());
-    assertGetEquals(rowKey, qualifier, Longs.toByteArray(7));    
+    assertGetEquals(rowKey, qualifier, Bytes.toBytes(7l));
   }
-    
+
   @Test
   public void atomicIncrement_nonexisting() throws Exception {
     byte[] rowKey = dataHelper.randomData("putKey-");
@@ -116,25 +115,25 @@ public class HBaseClientIT {
 
     AtomicIncrementRequest req = new AtomicIncrementRequest(TABLE_NAME.toBytes(), rowKey, FAMILY, qualifier, 1);
     Assert.assertEquals((Long)1L, client.atomicIncrement(req).join());
-    assertGetEquals(rowKey, qualifier, Longs.toByteArray(1));    
+    assertGetEquals(rowKey, qualifier, Bytes.toBytes(1l));
   }
 
   @Test
   public void compareAndSet() throws Exception {
     byte[] rowKey = dataHelper.randomData("putKey-");
     byte[] qualifier = Bytes.toBytes("qual");
-    byte[] value = Longs.toByteArray(1);
+    byte[] value = Bytes.toBytes(1l);
 
     //add new when empty
     PutRequest putRequest = new PutRequest(TABLE_NAME.toBytes(), rowKey, FAMILY, qualifier, value);
     Assert.assertTrue(client.compareAndSet(putRequest, new byte[0]).join());
-    assertGetEquals(rowKey, qualifier, Longs.toByteArray(1));
-    
-    putRequest = new PutRequest(TABLE_NAME.toBytes(), rowKey, FAMILY, qualifier, Longs.toByteArray(9));
+    assertGetEquals(rowKey, qualifier, Bytes.toBytes(1l));
+
+    putRequest = new PutRequest(TABLE_NAME.toBytes(), rowKey, FAMILY, qualifier, Bytes.toBytes(9l));
     Assert.assertTrue(client.compareAndSet(putRequest, value).join());
-    assertGetEquals(rowKey, qualifier, Longs.toByteArray(9));
+    assertGetEquals(rowKey, qualifier, Bytes.toBytes(9l));
   }
-  
+
   /**
    * Really basic test to make sure that put, get and delete work.
    */
@@ -183,15 +182,15 @@ public class HBaseClientIT {
     ArrayList<KeyValue> response = get(rowKey);
     Assert.assertEquals(1, response.size());
     Assert.assertTrue(Bytes.equals(value1And2, response.get(0).value()));
-    
-    
+
+
     deferredPut = client.put(new PutRequest(TABLE_NAME.getName(), rowKey2, FAMILY, qualifier, value1));
     client.flush().join();
     deferredPut.join();
-    
+
     Scanner scanner = new Scanner(client, TABLE_NAME.toBytes());
     client.openScanner(scanner);
-    
+
     ArrayList<ArrayList<KeyValue>> nextRows = scanner.nextRows(2).join();
     Assert.assertEquals(2, nextRows.size());
   }
@@ -210,7 +209,7 @@ public class HBaseClientIT {
   private ArrayList<KeyValue> get(byte[] key) throws Exception {
     return client.get(new GetRequest(TABLE_NAME.getName(), key)).join();
   }
-  
+
   @Test
   public void testConvertToDeferred() throws Exception {
     CompletableFuture<Integer> f = CompletableFuture.supplyAsync(() -> {

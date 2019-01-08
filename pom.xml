@@ -240,8 +240,8 @@
 
     <dependency>
       <groupId>com.google.cloud.bigtable</groupId>
-      <artifactId>bigtable-hbase-2.x-shaded</artifactId>
-      <version>1.6.0</version>
+      <artifactId>bigtable-hbase-2.x-hadoop</artifactId>
+      <version>1.8.0</version>
      </dependency>
 
     <!-- runtime dependencies -->
