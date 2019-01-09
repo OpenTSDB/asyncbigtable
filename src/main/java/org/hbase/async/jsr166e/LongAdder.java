@@ -33,7 +33,7 @@ import java.io.ObjectOutputStream;
  * collection keys.
  *
  * <p><em>jsr166e note: This class is targeted to be placed in
- * java.util.concurrent.atomic<em>
+ * java.util.concurrent.atomic</em>
  *
  * @since 1.8
  * @author Doug Lea

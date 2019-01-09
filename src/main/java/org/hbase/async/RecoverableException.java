@@ -28,7 +28,6 @@ package org.hbase.async;
 
 /**
  * An exception for which it's typically useful to retry
- * (such as {@link RegionOfflineException}).
  * <p>
  * The retry strategy is up to you, but it's typically recommended to put an
  * upper bound on the number of retries and to use some kind of an exponential
