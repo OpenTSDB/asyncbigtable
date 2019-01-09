@@ -27,7 +27,7 @@
 package org.hbase.async;
 
 /**
- * {@link RegionClient} usage statistics.
+ * NOT APPLICABLE TO CLOUD BIGTABLE
  * <p>
  * This is an immutable snapshot of usage statistics of the region client.
  * Please note that not all the numbers in the snapshot are collected
