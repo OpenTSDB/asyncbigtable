@@ -244,7 +244,7 @@ public final class ClientStats {
     return num_appends;
   }
   
-  /** Number calls to {@link HBaseClient#lockRow}.  */
+  /** Not applicable to Cloud Bigtable  */
   public long rowLocks() {
     return num_row_locks;
   }

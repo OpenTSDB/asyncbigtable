@@ -501,7 +501,9 @@ public final class HBaseClient {
     return flush_interval;
   }
 
-  /** @returns the default RPC timeout period in milliseconds */
+  /**
+   * @return the default RPC timeout period in milliseconds
+   */
   public int getDefaultRpcTimeout() {
     return hbase_config.getInt("hbase.rpc.timeout", 60000);
   }
