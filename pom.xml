@@ -24,7 +24,9 @@
   </licenses>
   <scm>
     <connection>scm:git:git@github.com:OpenTSDB/asyncbigtable.git</connection>
+    <developerConnection>scm:git:git@github.com:OpenTSDB/asyncbigtable.git</developerConnection>
     <url>https://github.com/OpenTSDB/asyncbigtable</url>
+    <tag>HEAD</tag>
   </scm>
   <issueManagement>
     <system>GitHub</system>
@@ -127,9 +129,6 @@
                 </goals>
               </execution>
             </executions>
-            <configuration>
-              <keyname>soulios@pythian.com</keyname>
-            </configuration>
           </plugin>
 
           <plugin>
