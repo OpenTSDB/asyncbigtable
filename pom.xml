@@ -3,7 +3,7 @@
 
   <groupId>com.pythian.opentsdb</groupId>
   <artifactId>asyncbigtable</artifactId>
-  <version>0.4.2-SNAPSHOT</version>
+  <version>0.4.2</version>
   <packaging>jar</packaging>
 
   <name>Async Bigtable library</name>
@@ -26,7 +26,7 @@
     <connection>scm:git:git@github.com:OpenTSDB/asyncbigtable.git</connection>
     <developerConnection>scm:git:git@github.com:OpenTSDB/asyncbigtable.git</developerConnection>
     <url>https://github.com/OpenTSDB/asyncbigtable</url>
-    <tag>HEAD</tag>
+    <tag>asyncbigtable-0.4.2</tag>
   </scm>
   <issueManagement>
     <system>GitHub</system>
