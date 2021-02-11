@@ -3,6 +3,7 @@
 [![Travis CI status][travis-shield]][travis-link]
 [![Maven][maven-shield]][maven-link]
 [![Stack Overflow][stackoverflow-shield]][stackoverflow-link]
+[![Mentioned in Awesome Bigtable](https://awesome.re/mentioned-badge-flat.svg)](https://github.com/zrosenbauer/awesome-bigtable)
 
 This is an HBase library intended to work as a drop in replacement for the
 fantastic AsyncHBase library and integrate OpenTSDB with Google Bigtable.
