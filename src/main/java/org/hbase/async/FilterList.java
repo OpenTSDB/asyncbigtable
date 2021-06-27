@@ -94,6 +94,13 @@ public final class FilterList extends ScanFilter {
     this.op = op;
   }
 
+  /** @return the number of filters in the filter list
+   *  @since 1.8 */
+  public int size() {
+    // filter's can't be null here and shouldn't even be empty
+    return filters.size();
+  }
+
   @Override
   byte[] name() {
     return NAME;
